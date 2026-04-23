@@ -30,6 +30,7 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   // --- Name + org capture ---
   { key: "ask_name", body: "Great. What's your first name?" },
   { key: "ask_organisation", body: "Thanks, {{name}}. And which organisation are you with?" },
+  { key: "org_ack", body: "Perfect. Let's begin, {{name}}." },
 
   // --- Section intros ---
   {
@@ -111,6 +112,8 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
     key: "coaching_interest_prompt",
     body: "One last thing — would you like {{coach_name}} to reach out personally? Reply YES or NO.",
   },
+  { key: "coaching_interest_yes", body: "Perfect. I've noted that. {{coach_name}} will reach out soon." },
+  { key: "coaching_interest_no", body: "No problem. Your results are always here if you change your mind." },
   {
     key: "closing",
     body:

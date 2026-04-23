@@ -8,21 +8,21 @@ type Widget =
   | { kind: "welcome" }
   | { kind: "text_input"; placeholder: string }
   | {
-      kind: "question";
-      questionNumber: number;
-      total: number;
-      sectionName: string;
-      stem: string;
-      options: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
-    }
+    kind: "question";
+    questionNumber: number;
+    total: number;
+    sectionName: string;
+    stem: string;
+    options: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
+  }
   | { kind: "yes_no"; context: "debrief_cta" | "coaching_interest" }
   | {
-      kind: "results";
-      resultId: string;
-      imageUrl: string;
-      overall: { score: number; maxScore: number; band: string };
-      dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
-    }
+    kind: "results";
+    resultId: string;
+    imageUrl: string;
+    overall: { score: number; maxScore: number; band: string };
+    dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
+  }
   | { kind: "closed"; message: string }
   | { kind: "unsupported"; state: string };
 
@@ -39,15 +39,15 @@ type Bubble =
   | (BubbleBase & { author: "bot"; kind: "image"; imageUrl: string })
   | (BubbleBase & { author: "user"; kind: "text"; body: string })
   | (BubbleBase & {
-      author: "user";
-      kind: "answered_question";
-      sectionName: string;
-      questionNumber: number;
-      total: number;
-      stem: string;
-      optionLabel: "A" | "B" | "C" | "D";
-      optionText: string;
-    });
+    author: "user";
+    kind: "answered_question";
+    sectionName: string;
+    questionNumber: number;
+    total: number;
+    stem: string;
+    optionLabel: "A" | "B" | "C" | "D";
+    optionText: string;
+  });
 
 // Distributive Omit — plain Omit over a union collapses shared keys and
 // loses the discriminant, which breaks the "answered_question" variant.
@@ -405,7 +405,22 @@ type DimensionResult = { title: string; score: string; max: string; band: string
 
 function parseDimensionResult(text: string): DimensionResult | null {
   const lines = text.split("\n").map((l) => l.trim());
-  const title = lines[0]?.match(/^\*(.+)\*$/)?.[1];
+  const header = lines[0];
+  if (!header) return null;
+
+  // New format: *Title* — Score / Max · Band
+  const headerMatch = header.match(/^\*(.+)\*\s*[—\-]\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*·\s*(.+)$/);
+  if (headerMatch) {
+    const title = headerMatch[1]!.trim();
+    const score = headerMatch[2]!;
+    const max = headerMatch[3]!;
+    const band = headerMatch[4]!.trim();
+    const body = lines.slice(1).join("\n").trim();
+    return { title, score, max, band, body };
+  }
+
+  // Fallback to old format if needed
+  const title = header.match(/^\*(.+)\*$/)?.[1];
   if (!title) return null;
   const scoreLine = lines.find((l) => /^Your score:/i.test(l));
   const bandLine = lines.find((l) => /^Band:/i.test(l));
@@ -428,21 +443,33 @@ type OverallResult = {
 };
 
 function parseOverallResult(text: string): OverallResult | null {
-  const lines = text.split("\n");
-  const title = lines[0]?.trim().match(/^\*(.+)\*$/)?.[1];
-  if (!title) return null;
+  const lines = text.split("\n").map((l) => l.trim());
+  const header = lines[0];
+  if (!header) return null;
+
+  // Title is usually *BOLD*
+  const titleMatch = header.match(/^\*(.+)\*$/);
+  if (!titleMatch) return null;
+  const title = titleMatch[1]!.trim();
+
   const sections: OverallResult["sections"] = [];
   let overallScore: string | undefined;
   let overallMax: string | undefined;
   let bandLabel: string | undefined;
   const interpretationLines: string[] = [];
   let seenAll = false;
-  for (const raw of lines.slice(1)) {
-    const line = raw.trim();
-    const secMatch = line.match(/^(Section\s+\d+):\s*(\S+)\s*\/\s*(\S+)/i);
-    const overallMatch = line.match(/^OVERALL:\s*(\S+)\s*\/\s*(\S+)/i) ?? line.match(/^Total:\s*(\S+)\s*\/\s*(\S+)/i);
-    const bandMatch = line.match(/^Readiness Level:\s*(.+)/i);
-    if (!seenAll && secMatch) {
+
+  for (const line of lines.slice(1)) {
+    if (!line) continue;
+
+    // Matches "Section 1: 10 / 20" or "Section 1 — 10 / 20"
+    const secMatch = line.match(/^(Section\s+\d+)\s*[:—\-]\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
+    // Matches "OVERALL: 10 / 20" or "Total: 10 / 20"
+    const overallMatch = line.match(/^(?:OVERALL|Total)\s*[:—\-]\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
+    // Matches "Readiness Level: XYZ" or "Band: XYZ"
+    const bandMatch = line.match(/^(?:Readiness Level|Band)\s*[:—\-]\s*(.+)/i);
+
+    if (secMatch) {
       sections.push({ label: secMatch[1]!, score: secMatch[2]!, max: secMatch[3]! });
     } else if (overallMatch) {
       overallScore = overallMatch[1];
@@ -450,11 +477,14 @@ function parseOverallResult(text: string): OverallResult | null {
       seenAll = true;
     } else if (bandMatch) {
       bandLabel = bandMatch[1]!.trim();
-    } else if (seenAll && line) {
-      interpretationLines.push(raw);
+      seenAll = true;
+    } else if (seenAll) {
+      interpretationLines.push(line);
     }
   }
+
   if (sections.length === 0 && !overallScore) return null;
+
   return {
     title,
     sections,
@@ -495,17 +525,17 @@ function DimensionResultCard({ title, score, max, band, body }: DimensionResult)
 function OverallResultCard({ title, sections, overallScore, overallMax, bandLabel, body }: OverallResult) {
   return (
     <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[#E5B04A] bg-white shadow-sm ring-1 ring-[#E7D8B5]">
-      <div className="border-b border-[#E7D8B5] bg-[#2A1E17] px-4 py-3">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#F2C84B]">
+      <div className="border-b border-[#E7D8B5] bg-[#FBF3DE] px-4 py-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#C9942B]">
           Overall
         </div>
-        <div className="mt-0.5 font-serif text-base font-semibold text-[#FBF3DE]">{title}</div>
+        <div className="mt-0.5 font-serif text-base font-semibold text-[#2A1E17]">{title}</div>
         {(overallScore || bandLabel) && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {overallScore && overallMax && (
-              <span className="inline-flex items-baseline gap-1 rounded-lg bg-[#FBF3DE] px-2.5 py-1">
-                <span className="font-mono text-base font-semibold text-[#2A1E17]">{overallScore}</span>
-                <span className="font-mono text-xs text-[#8A7868]">/ {overallMax}</span>
+              <span className="inline-flex items-baseline gap-1 rounded-lg bg-[#2A1E17] px-2.5 py-1 text-white">
+                <span className="font-mono text-base font-semibold">{overallScore}</span>
+                <span className="font-mono text-xs text-white/60">/ {overallMax}</span>
               </span>
             )}
             {bandLabel && (
@@ -520,7 +550,10 @@ function OverallResultCard({ title, sections, overallScore, overallMax, bandLabe
         <div className="divide-y divide-[#E7D8B5]">
           {sections.map((s) => (
             <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-sm font-medium text-[#2A1E17]">{s.label}</span>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#10B981]" /> {/* Status dot */}
+                <span className="text-sm font-medium text-[#2A1E17]">{s.label}</span>
+              </div>
               <span className="font-mono text-sm text-[#2A1E17]">
                 {s.score}
                 <span className="text-[#8A7868]"> / {s.max}</span>
@@ -530,36 +563,61 @@ function OverallResultCard({ title, sections, overallScore, overallMax, bandLabe
         </div>
       )}
       {body && (
-        <p className="whitespace-pre-wrap border-t border-[#E7D8B5] bg-[#FBF3DE] px-4 py-3 text-sm leading-relaxed text-[#2A1E17]">
-          {body}
-        </p>
+        <div className="border-t border-[#E7D8B5] bg-[#FBF3DE]/50 px-4 py-3">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#2A1E17]">
+            {body}
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
-// Turns plain text into React nodes where http(s):// URLs render as clickable
-// <a> tags. Needed so DB-rendered templates — e.g. the Calendly booking link
-// in `coaching_yes` — open when clicked instead of showing as raw text.
+/**
+ * Renders text with support for:
+ * 1. Clickable URLs (https?://...)
+ * 2. Bold markdown (*text* or **text**)
+ */
 function LinkifiedText({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s<>()]+)/g);
+  // First, split by URLs
+  const urlParts = text.split(/(https?:\/\/[^\s<>()]+)/g);
+
   return (
     <>
-      {parts.map((part, i) =>
-        /^https?:\/\//.test(part) ? (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-[#2A1E17] underline underline-offset-2 hover:text-[#3B2B20]"
-          >
-            {part}
-          </a>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+      {urlParts.map((part, i) => {
+        if (/^https?:\/\//.test(part)) {
+          return (
+            <a
+              key={i}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[#2A1E17] underline underline-offset-2 hover:text-[#3B2B20]"
+            >
+              {part}
+            </a>
+          );
+        }
+
+        // For non-URL parts, handle bold formatting (*text* or **text**)
+        // We look for patterns like **bold** or *bold*
+        const boldParts = part.split(/(\*\*?[^*]+\*\*?)/g);
+        return (
+          <span key={i}>
+            {boldParts.map((bp, j) => {
+              const m = bp.match(/^\*\*?([^*]+)\*\*?$/);
+              if (m) {
+                return (
+                  <strong key={j} className="font-bold">
+                    {m[1]}
+                  </strong>
+                );
+              }
+              return <span key={j}>{bp}</span>;
+            })}
+          </span>
+        );
+      })}
     </>
   );
 }
