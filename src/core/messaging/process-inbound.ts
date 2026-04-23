@@ -266,7 +266,7 @@ async function sendWelcomeSequence(
     name_or_there: "there",
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
-    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
+    dimension_names_list: "Section 1, Section 2, Section 3",
     duration_estimate: "10–12 minutes",
     question_count: 25,
   };

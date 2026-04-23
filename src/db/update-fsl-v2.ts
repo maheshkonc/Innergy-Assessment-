@@ -9,7 +9,7 @@ import { prisma } from "./client";
 type Opt = { label: "A" | "B" | "C" | "D"; text: string; score: number };
 type Q = { n: number; stem: string; options: Opt[] };
 
-// ---- Section A: Cognitive Clarity (8 questions, max 38) ----
+// ---- Section A: Section 1 (8 questions, max 38) ----
 const COGNITIVE: Q[] = [
   {
     n: 1,
@@ -93,7 +93,7 @@ const COGNITIVE: Q[] = [
   },
 ];
 
-// ---- Section B: Relational Influence (9 questions, max 45) ----
+// ---- Section B: Section 2 (9 questions, max 45) ----
 const RELATIONAL: Q[] = [
   {
     n: 1,
@@ -187,7 +187,7 @@ const RELATIONAL: Q[] = [
   },
 ];
 
-// ---- Section C: Inner Mastery (8 questions, max 40) ----
+// ---- Section C: Section 3 (8 questions, max 40) ----
 const INNER: Q[] = [
   {
     n: 1,
@@ -272,19 +272,19 @@ const INNER: Q[] = [
 ];
 
 const DIM_BANDS: Record<string, Array<{ min: number; max: number; label: string; interp: string }>> = {
-  "Cognitive Clarity": [
+  "Section 1": [
     { min: 8, max: 13, label: "Critical Gap", interp: "The cognitive infrastructure for leading in complexity is not yet built. Significant and urgent intervention needed." },
     { min: 14, max: 22, label: "At Risk", interp: "Predominantly reactive and backward-looking. Will be increasingly exposed as the pace of change accelerates." },
     { min: 23, max: 30, label: "Developing", interp: "Real capability present but inconsistent. Thinks clearly in familiar territory but struggles when situations are genuinely new." },
     { min: 31, max: 38, label: "Strong", interp: "Genuine cognitive agility. Filters well, adapts fast, thinks ahead, stays curious under pressure." },
   ],
-  "Relational Influence": [
+  "Section 2": [
     { min: 9, max: 16, label: "Critical Gap", interp: "The team is operating on relational patterns built for a slower, more stable world. The gaps here are not individual - they are cultural and will require deliberate structural intervention." },
     { min: 17, max: 26, label: "At Risk", interp: "The team's relational dynamics are limiting execution and adaptability. Compliance is mistaken for alignment, feedback is avoided, and change is slower than the business needs." },
     { min: 27, max: 36, label: "Developing", interp: "Real relational capability exists but is inconsistent. The team performs well in familiar conditions and shows friction when situations are complex, cross-cultural, or require letting go of the old." },
     { min: 37, max: 45, label: "Strong", interp: "This team operates with genuine relational maturity. Decisions land, feedback flows, execution is fast, and the team can let go when needed. This is a high-performing team culture." },
   ],
-  "Inner Mastery": [
+  "Section 3": [
     { min: 8, max: 13, label: "Critical Gap", interp: "The nervous system is running the leader rather than the leader running the nervous system. At this level, inner state dysregulation is a direct business risk - affecting decisions, team culture, and long-term sustainability of performance." },
     { min: 14, max: 23, label: "At Risk", interp: "The leader's inner state is regularly affecting the quality of their judgment, their recovery, and their impact on others. This is not a character issue - it is a capacity issue that can be built with the right practices and support." },
     { min: 24, max: 32, label: "Developing", interp: "Real inner capacity is present but inconsistent. The leader performs well in stable conditions and shows the edges of their inner regulation when pressure is sustained or interpersonal intensity is high." },
@@ -330,9 +330,9 @@ async function main() {
   const byDimension = new Map(sections.map((s) => [s.dimension.name, s]));
 
   const plan: Array<{ dimension: string; data: Q[] }> = [
-    { dimension: "Cognitive Clarity", data: COGNITIVE },
-    { dimension: "Relational Influence", data: RELATIONAL },
-    { dimension: "Inner Mastery", data: INNER },
+    { dimension: "Section 1", data: COGNITIVE },
+    { dimension: "Section 2", data: RELATIONAL },
+    { dimension: "Section 3", data: INNER },
   ];
 
   await prisma.$transaction(async (tx) => {

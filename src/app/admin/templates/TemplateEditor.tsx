@@ -25,7 +25,7 @@ export function TemplateEditor({ row }: { row: TemplateRow }) {
         headers: {
           "Content-Type": "application/json",
           // V1 auth stub — NextAuth session replaces this later.
-          "X-Admin-Email": window.prompt("Your admin email") ?? "",
+
         },
         body: JSON.stringify({ body }),
       });

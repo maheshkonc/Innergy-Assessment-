@@ -20,9 +20,9 @@ import { LLM_INTERPRETATION_PROMPT_V1 } from "./fixtures/llm_prompt";
 
 async function seedDimensions() {
   const dimensions = [
-    { id: DIM_COGNITIVE, name: "Cognitive Clarity", internalTag: "cognitive" },
-    { id: DIM_RELATIONAL, name: "Relational Influence", internalTag: "relational" },
-    { id: DIM_INNER, name: "Inner Mastery", internalTag: "inner" },
+    { id: DIM_COGNITIVE, name: "Section 1", internalTag: "cognitive" },
+    { id: DIM_RELATIONAL, name: "Section 2", internalTag: "relational" },
+    { id: DIM_INNER, name: "Section 3", internalTag: "inner" },
   ];
   for (const d of dimensions) {
     await prisma.dimension.upsert({

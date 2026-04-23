@@ -397,7 +397,7 @@ async function buildBaseVars(prisma: PrismaClient, tenant: Tenant) {
     coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? tenant.linkedinUrl ?? "",
     name_or_there: "there",
     duration_estimate: "10–12 minutes",
-    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
+    dimension_names_list: "Section 1, Section 2, Section 3",
     question_count: 25,
   } as Record<string, string | number>;
 }

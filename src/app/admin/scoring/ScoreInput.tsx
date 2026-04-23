@@ -23,10 +23,8 @@ export function ScoreInput({
     try {
       const res = await fetch(`/api/admin/options/${optionId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Admin-Email": window.prompt("Your admin email") ?? "",
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ score }),
       });
       if (!res.ok) {

@@ -24,7 +24,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
 
-  const admin = await resolveAdminActor(prisma, req.headers);
+  const admin = await resolveAdminActor(prisma, req);
   if (!admin) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   const parsed = PatchBody.safeParse(await req.json());

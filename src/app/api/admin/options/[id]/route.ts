@@ -28,7 +28,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
 
-  const admin = await resolveAdminActor(prisma, req.headers);
+  const admin = await resolveAdminActor(prisma, req);
   if (!admin) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   if (!canEditGlobalTemplates(admin)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

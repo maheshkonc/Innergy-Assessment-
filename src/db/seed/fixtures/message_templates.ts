@@ -35,18 +35,18 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   {
     key: "section_intro_cognitive",
     body:
-      "SECTION 1 OF 3: COGNITIVE CLARITY. This section is about how you think and decide — especially when things are fast-moving, ambiguous, or genuinely new.\n\n" +
+      "Section 1 of 3. This section is about how you think and decide — especially when things are fast-moving, ambiguous, or genuinely new.\n\n" +
       "For each question, reply with A, B, C, or D.",
   },
   {
     key: "section_intro_relational",
     body:
-      "Section 1 complete. ✓\n\nSECTION 2 OF 3: RELATIONAL INFLUENCE. This section is about your team — how you lead together, make decisions, give feedback, and respond to change. Answer based on how your top team operates as a whole.",
+      "Section 1 complete. ✓\n\nSection 2 of 3. This section is about your team — how you lead together, make decisions, give feedback, and respond to change. Answer based on how your top team operates as a whole.",
   },
   {
     key: "section_intro_inner",
     body:
-      "Section 2 complete. ✓\n\nSECTION 3 OF 3: INNER MASTERY. This section is personal. It's about your inner experience — how you feel under pressure, how you recover, and the quality of presence you bring to the people around you. Answer honestly. These questions are often the most revealing.",
+      "Section 2 complete. ✓\n\nSection 3 of 3. This section is personal. It's about your inner experience — how you feel under pressure, how you recover, and the quality of presence you bring to the people around you. Answer honestly. These questions are often the most revealing.",
   },
 
   // --- Question delivery ---
@@ -80,9 +80,9 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
     key: "overall_result",
     body:
       "*OVERALL: {{overall_band_label}}*\n\n" +
-      "Cognitive Clarity: {{cognitive_score}} / {{cognitive_max}}\n" +
-      "Relational Influence: {{relational_score}} / {{relational_max}}\n" +
-      "Inner Mastery: {{inner_score}} / {{inner_max}}\n\n" +
+      "Section 1: {{cognitive_score}} / {{cognitive_max}}\n" +
+      "Section 2: {{relational_score}} / {{relational_max}}\n" +
+      "Section 3: {{inner_score}} / {{inner_max}}\n\n" +
       "Total: {{overall_score}} / {{overall_max_score}}\n\n{{overall_interpretation}}",
   },
 

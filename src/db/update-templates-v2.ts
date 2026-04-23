@@ -11,11 +11,11 @@ type Tpl = { key: string; body: string };
 const TEMPLATES: Tpl[] = [
   {
     key: "welcome_1",
-    body: "Hi! I'm the {{tenant_name}} Leadership Assessment bot. 👋 I work with {{coach_name}} — leadership coach and founder of {{tenant_name}}.",
+    body: "Hi there — welcome to the AI Leadership Readiness Assessment from {{tenant_name}}.\n\nI'm here on behalf of {{coach_name}} to help you understand where you stand across three dimensions that matter most for leading in the AI age.",
   },
   {
     key: "welcome_2",
-    body: "In the next 12–15 minutes, I'll help you understand how ready you are as a leader for the AI age — across three dimensions: how you think, how you lead your team, and how you show up under pressure.",
+    body: "In the next 10 minutes, I'll help you understand how ready you are as a leader for the AI age — across three dimensions: how you think, how you lead your team, and how you show up under pressure.",
   },
   {
     key: "welcome_3",
@@ -45,9 +45,9 @@ const TEMPLATES: Tpl[] = [
     key: "overall_result",
     body:
       "*YOUR FULL SPECTRUM LEADERSHIP SCORE*\n\n" +
-      "Cognitive Clarity: {{cognitive_score}} / {{cognitive_max}}\n" +
-      "Relational Influence: {{relational_score}} / {{relational_max}}\n" +
-      "Inner Mastery: {{inner_score}} / {{inner_max}}\n\n" +
+      "Section 1: {{cognitive_score}} / {{cognitive_max}}\n" +
+      "Section 2: {{relational_score}} / {{relational_max}}\n" +
+      "Section 3: {{inner_score}} / {{inner_max}}\n\n" +
       "OVERALL: {{overall_score}} / {{overall_max_score}}\n" +
       "Readiness Level: {{overall_band_label}}\n\n" +
       "{{overall_interpretation}}",
@@ -86,7 +86,7 @@ const TEMPLATES: Tpl[] = [
   {
     key: "coaching_interest_yes",
     body:
-      "Noted. {{coach_name}} works with a small number of senior leaders on exactly this — building the Full Spectrum Leadership infrastructure through a structured coaching programme.\n\n" +
+      "Noted. {{coach_name}} works with a number of senior leaders on exactly this — building the Full Spectrum Leadership infrastructure through a structured coaching programme.\n\n" +
       "{{coach_name}} will reach out within 48 hours to share more. No pressure — it's just a conversation.",
   },
   {

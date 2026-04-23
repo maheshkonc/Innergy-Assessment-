@@ -23,7 +23,7 @@ export function TenantEditor({ tenant }: { tenant: TenantBasics }) {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        "X-Admin-Email": window.prompt("Your admin email") ?? "",
+
       },
       body: JSON.stringify({
         name: form.name,
@@ -119,7 +119,7 @@ export function FlagToggle({
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        "X-Admin-Email": window.prompt("Your admin email") ?? "",
+
       },
       body: JSON.stringify({ tenantId, key: flag, value: next }),
     });

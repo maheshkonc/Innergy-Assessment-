@@ -48,9 +48,9 @@ export async function finaliseResults(
   });
   const byName = new Map(dimensionRows.map((d) => [d.name, d]));
 
-  const cog = score.dimensions.find((d) => byName.get("Cognitive Clarity")?.id === d.dimensionId)!;
-  const rel = score.dimensions.find((d) => byName.get("Relational Influence")?.id === d.dimensionId)!;
-  const inner = score.dimensions.find((d) => byName.get("Inner Mastery")?.id === d.dimensionId)!;
+  const cog = score.dimensions.find((d) => byName.get("Section 1")?.id === d.dimensionId)!;
+  const rel = score.dimensions.find((d) => byName.get("Section 2")?.id === d.dimensionId)!;
+  const inner = score.dimensions.find((d) => byName.get("Section 3")?.id === d.dimensionId)!;
 
   const result = await prisma.result.create({
     data: {
@@ -189,19 +189,19 @@ export async function resendLatestResults(
   });
 
   const dimensionBandMaxByName: Record<string, { score: number; max: number; band: string }> = {
-    "Cognitive Clarity": {
+    "Section 1": {
       score: result.cognitiveScore,
-      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Cognitive Clarity")?.id),
+      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Section 1")?.id),
       band: result.cognitiveBand,
     },
-    "Relational Influence": {
+    "Section 2": {
       score: result.relationalScore,
-      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Relational Influence")?.id),
+      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Section 2")?.id),
       band: result.relationalBand,
     },
-    "Inner Mastery": {
+    "Section 3": {
       score: result.innerScore,
-      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Inner Mastery")?.id),
+      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Section 3")?.id),
       band: result.innerBand,
     },
   };
@@ -227,9 +227,9 @@ export async function resendLatestResults(
   }
 
   if (overallTpl) {
-    const cc = dimensionBandMaxByName["Cognitive Clarity"]!;
-    const ri = dimensionBandMaxByName["Relational Influence"]!;
-    const im = dimensionBandMaxByName["Inner Mastery"]!;
+    const cc = dimensionBandMaxByName["Section 1"]!;
+    const ri = dimensionBandMaxByName["Section 2"]!;
+    const im = dimensionBandMaxByName["Section 3"]!;
     const body = renderTemplate(
       overallTpl.body,
       {

@@ -20,7 +20,7 @@ export function PublishButton({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Admin-Email": window.prompt("Your admin email") ?? "",
+
       },
       body: JSON.stringify({ versionId }),
     });

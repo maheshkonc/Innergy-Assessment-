@@ -17,7 +17,7 @@ const PutBody = z.object({
 });
 
 export async function PUT(req: NextRequest) {
-  const admin = await resolveAdminActor(prisma, req.headers);
+  const admin = await resolveAdminActor(prisma, req);
   if (!admin) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   const parsed = PutBody.safeParse(await req.json());

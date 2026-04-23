@@ -21,7 +21,7 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  const admin = await resolveAdminActor(prisma, req.headers);
+  const admin = await resolveAdminActor(prisma, req);
   if (!admin) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   if (admin.role !== "super_admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

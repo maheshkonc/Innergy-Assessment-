@@ -316,7 +316,7 @@ async function buildBaseVars(tenant: Tenant): Promise<Record<string, string | nu
     coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? "",
     name_or_there: "there",
     duration_estimate: "10–12 minutes",
-    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
+    dimension_names_list: "Section 1, Section 2, Section 3",
     question_count: 25,
   };
 }
@@ -330,7 +330,7 @@ async function renderWelcomeActions(tenant: Tenant): Promise<OutboundAction[]> {
     name_or_there: "there",
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
-    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
+    dimension_names_list: "Section 1, Section 2, Section 3",
     duration_estimate: "10–12 minutes",
     question_count: 25,
   };
@@ -401,9 +401,9 @@ async function buildWidget(
       });
       const maxFor = (name: string) =>
         bands.filter((b) => b.dimension.name === name).reduce((m, b) => Math.max(m, b.maxScore), 0);
-      const ccMax = maxFor("Cognitive Clarity");
-      const riMax = maxFor("Relational Influence");
-      const imMax = maxFor("Inner Mastery");
+      const ccMax = maxFor("Section 1");
+      const riMax = maxFor("Section 2");
+      const imMax = maxFor("Section 3");
       const base = process.env.APP_BASE_URL ?? "";
       return {
         kind: "results",
@@ -415,9 +415,9 @@ async function buildWidget(
           band: res.overallBand,
         },
         dimensions: [
-          { name: "Cognitive Clarity", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
-          { name: "Relational Influence", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
-          { name: "Inner Mastery", score: res.innerScore, maxScore: imMax, band: res.innerBand },
+          { name: "Section 1", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
+          { name: "Section 2", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
+          { name: "Section 3", score: res.innerScore, maxScore: imMax, band: res.innerBand },
         ],
       };
     }

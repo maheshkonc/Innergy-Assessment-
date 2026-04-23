@@ -35,7 +35,7 @@ export function EditableField({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "X-Admin-Email": window.prompt("Your admin email") ?? "",
+
         },
         body: JSON.stringify(body),
       });
