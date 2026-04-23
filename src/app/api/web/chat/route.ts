@@ -35,21 +35,21 @@ type Widget =
   | { kind: "welcome" }
   | { kind: "text_input"; placeholder: string }
   | {
-      kind: "question";
-      questionNumber: number;
-      total: number;
-      sectionName: string;
-      stem: string;
-      options: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
-    }
+    kind: "question";
+    questionNumber: number;
+    total: number;
+    sectionName: string;
+    stem: string;
+    options: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
+  }
   | { kind: "yes_no"; context: "debrief_cta" | "coaching_interest" }
   | {
-      kind: "results";
-      resultId: string;
-      imageUrl: string;
-      overall: { score: number; maxScore: number; band: string };
-      dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
-    }
+    kind: "results";
+    resultId: string;
+    imageUrl: string;
+    overall: { score: number; maxScore: number; band: string };
+    dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
+  }
   | { kind: "closed"; message: string }
   | { kind: "unsupported"; state: string };
 
@@ -408,7 +408,7 @@ async function buildWidget(
       return {
         kind: "results",
         resultId: res.id,
-        imageUrl: `${base.replace(/\/$/, "")}/api/image/result/${res.id}`,
+        imageUrl: `/api/image/result/${res.id}`,
         overall: {
           score: res.overallScore,
           maxScore: ccMax + riMax + imMax,
@@ -454,8 +454,7 @@ function toWebActions(actions: OutboundAction[]): WebAction[] {
   for (const a of actions) {
     if (a.kind === "text") out.push({ kind: "text", body: a.body });
     else if (a.kind === "image_results_circle") {
-      const base = process.env.APP_BASE_URL ?? "";
-      out.push({ kind: "image", imageUrl: `${base.replace(/\/$/, "")}/api/image/result/${a.resultId}` });
+      out.push({ kind: "image", imageUrl: `/api/image/result/${a.resultId}` });
     }
     // voice_if_enabled / delay_ms / log_invalid / resend_latest_results are ignored for web
   }
