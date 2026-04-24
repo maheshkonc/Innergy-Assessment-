@@ -80,19 +80,11 @@ function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: 
   // three wedges meet and gives a clean focal anchor.
   const medallion = `
     <circle cx="${cx}" cy="${cy}" r="${(r * 0.22).toFixed(2)}" fill="${BG}" stroke="${RIM}" stroke-width="2"/>
-    <text x="${cx}" y="${(cy - size * 0.01).toFixed(2)}" text-anchor="middle" dominant-baseline="middle"
-          font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.018)}"
-          fill="${TEXT_MUTED}" font-weight="600" letter-spacing="2">
-      READOUT
-    </text>
-    <g transform="translate(${cx - size * 0.05} ${cy + size * 0.022})">
-      <path d="${STAR_PATH}" fill="${ACCENT_YELLOW}" transform="translate(-16, -26) scale(0.6)"/>
-      <text x="0" y="0" text-anchor="middle" dominant-baseline="middle"
-            font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.035)}"
-            fill="${TEXT_DARK}" font-style="italic">
-        innergy
-      </text>
-    </g>`;
+    <text x="${cx}" y="${cy.toFixed(2)}" text-anchor="middle" dominant-baseline="middle"
+          font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.03)}"
+          fill="${TEXT_DARK}" font-weight="700" letter-spacing="2">
+      REPORT
+    </text>`;
 
   // Title — centered at top above the circle.
   const titleBlock = title
