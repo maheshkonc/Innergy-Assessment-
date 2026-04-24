@@ -17,7 +17,8 @@
     "db:seed": "tsx src/db/seed/index.ts",
     "db:reset": "prisma migrate reset --force && pnpm db:seed",
     "worker:abandonment": "tsx src/workers/abandonment.ts",
-    "worker:notifications": "tsx src/workers/notifications.ts"
+    "worker:notifications": "tsx src/workers/notifications.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
