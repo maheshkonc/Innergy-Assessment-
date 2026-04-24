@@ -28,6 +28,10 @@ const STROKE = "#FCF8ED";    // slice dividers — match bg for clean breaks
 const TEXT_DARK = "#36211B"; // primary ink
 const TEXT_MUTED = "#8A7868"; // using hex for now, could be 0.6 opacity
 const RIM = "#E7D8B5";       // subtle border ring
+const ACCENT_YELLOW = "#FFDE59";
+
+// 4-pointed sparkle star path (0,0 centered)
+const STAR_PATH = "M 0,-10 C 1,-1 1,-1 10,0 C 1,1 1,1 0,10 C -1,1 -1,1 -10,0 C -1,-1 -1,-1 0,-10 Z";
 
 function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: string): string {
   const cx = size / 2;
@@ -81,21 +85,27 @@ function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: 
           fill="${TEXT_MUTED}" font-weight="600" letter-spacing="2">
       READOUT
     </text>
-    <text x="${cx}" y="${(cy + size * 0.022).toFixed(2)}" text-anchor="middle" dominant-baseline="middle"
-          font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.032)}"
-          fill="${TEXT_DARK}" font-style="italic">
-      innergy
-    </text>`;
+    <g transform="translate(${cx - size * 0.05} ${cy + size * 0.022})">
+      <path d="${STAR_PATH}" fill="${ACCENT_YELLOW}" transform="translate(-16, -26) scale(0.6)"/>
+      <text x="0" y="0" text-anchor="middle" dominant-baseline="middle"
+            font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.035)}"
+            fill="${TEXT_DARK}" font-style="italic">
+        innergy
+      </text>
+    </g>`;
 
   // Title — centered at top above the circle.
   const titleBlock = title
     ? `
-      <text x="${cx}" y="${Math.round(size * 0.08)}" text-anchor="middle"
-            font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.042)}"
-            fill="${TEXT_DARK}" font-weight="600">
-        ${escape(title)}
-      </text>
-      <text x="${cx}" y="${Math.round(size * 0.115)}" text-anchor="middle"
+      <g transform="translate(${cx}, ${Math.round(size * 0.08)})">
+        <path d="${STAR_PATH}" fill="${ACCENT_YELLOW}" transform="translate(-80, -28) scale(1.4)"/>
+        <text x="0" y="0" text-anchor="middle"
+              font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.055)}"
+              fill="${TEXT_DARK}" font-weight="700">
+          Innergy
+        </text>
+      </g>
+      <text x="${cx}" y="${Math.round(size * 0.125)}" text-anchor="middle"
             font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.02)}"
             fill="${TEXT_MUTED}" letter-spacing="3" font-weight="600">
         FULL SPECTRUM LEADERSHIP
