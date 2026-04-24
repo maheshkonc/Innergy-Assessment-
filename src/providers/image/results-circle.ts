@@ -23,8 +23,8 @@ export async function renderResultsCircle(
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
-const BG = "#FFFAEF";        // warm cream page/background
-const STROKE = "#FFFAEF";    // slice dividers — match bg for clean breaks
+const BG = "#FCF8ED";        // warm cream page/background
+const STROKE = "#FCF8ED";    // slice dividers — match bg for clean breaks
 const TEXT_DARK = "#36211B"; // primary ink
 const TEXT_MUTED = "#8A7868"; // using hex for now, could be 0.6 opacity
 const RIM = "#E7D8B5";       // subtle border ring

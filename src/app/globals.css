@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 :root {
-  --background: #FFFAEF;
+  --background: rgb(252 248 237);
   --foreground: #36211B;
   --accent-pink: #FF3F64;
   --accent-yellow: #FFDE59;
@@ -29,19 +29,44 @@ body {
 }
 
 @keyframes innergy-typing-dot {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
-  30% { transform: translateY(-3px); opacity: 1; }
+
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
+
 .innergy-typing-dot {
   animation: innergy-typing-dot 1.1s infinite ease-in-out;
 }
-.innergy-typing-dot:nth-child(2) { animation-delay: 0.15s; }
-.innergy-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+.innergy-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.innergy-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
 
 @keyframes innergy-bubble-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
 .innergy-bubble-in {
   animation: innergy-bubble-in 280ms ease-out both;
 }
