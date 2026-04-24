@@ -1,6 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,700&family=Montserrat:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --background: #FFFAEF;
+  --foreground: #36211B;
+  --accent-pink: #FF3F64;
+  --accent-yellow: #FFDE59;
+  --container-light: #E7D8B5;
+  --container-dark: #36211B;
+
+  --font-serif: "Fraunces", "Playfair Display", serif;
+  --font-sans: "Montserrat", sans-serif;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+}
+
+@layer utilities {
+  .font-serif-heading {
+    font-family: var(--font-serif);
+  }
+}
 
 @keyframes innergy-typing-dot {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }

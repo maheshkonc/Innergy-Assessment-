@@ -165,16 +165,16 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
         />
       )}
 
-      <div className="flex flex-col overflow-hidden rounded-3xl border border-[#E7D8B5] bg-[#FBF3DE] shadow-sm">
-        <div className="flex items-center justify-between border-b border-[#E7D8B5] bg-[#FBF3DE] px-4 py-2.5">
-          <div className="flex items-center gap-2 text-xs font-medium text-[#2A1E17]">
-            <span className="inline-flex h-2 w-2 rounded-full bg-[#2A1E17]" />
+      <div className="flex flex-col overflow-hidden rounded-3xl border border-[var(--container-light)] bg-[var(--background)] shadow-sm">
+        <div className="flex items-center justify-between border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-2.5">
+          <div className="flex items-center gap-2 text-xs font-medium text-[var(--foreground)]">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--accent-pink)]" />
             {state === "loading" ? "Connecting…" : stateLabel(state)}
           </div>
           <button
             onClick={handleRestart}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#8A7868] transition hover:bg-white/60 hover:text-[#2A1E17] disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#8A7868] transition hover:bg-white/60 hover:text-[var(--foreground)] disabled:opacity-50"
             title="Abandon the current session and begin a new assessment"
           >
             <svg
@@ -196,12 +196,12 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
 
         <div
           ref={scrollRef}
-          className="max-h-[78vh] min-h-[520px] overflow-y-auto bg-[#FBF3DE] p-5 sm:p-6"
+          className="max-h-[78vh] min-h-[520px] overflow-y-auto bg-[var(--background)] p-5 sm:p-6"
         >
           {bubbles.length === 0 && state === "loading" && (
             <div className="flex h-full items-center justify-center py-10">
-              <div className="flex items-center gap-2 text-sm text-[#8A7868]">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[#E5B04A]" />
+              <div className="flex items-center gap-2 text-sm text-[var(--foreground)] opacity-70">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--accent-yellow)]" />
                 Loading
               </div>
             </div>
@@ -236,12 +236,12 @@ function TypingBubble() {
     <div className="flex items-end gap-2 innergy-bubble-in">
       <Avatar who="bot" />
       <div
-        className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm border-l-[3px] border-[#E5B04A] bg-white px-4 py-3 shadow-sm ring-1 ring-[#E7D8B5]"
+        className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white px-4 py-3 shadow-sm ring-1 ring-[var(--container-light)]"
         aria-label={`${COACH_NAME} is typing`}
       >
-        <span className="innergy-typing-dot h-1.5 w-1.5 rounded-full bg-[#2A1E17]" />
-        <span className="innergy-typing-dot h-1.5 w-1.5 rounded-full bg-[#2A1E17]" />
-        <span className="innergy-typing-dot h-1.5 w-1.5 rounded-full bg-[#2A1E17]" />
+        <span className="innergy-typing-dot h-1.5 w-1.5 rounded-full bg-[var(--foreground)]" />
+        <span className="innergy-typing-dot h-1.5 w-1.5 rounded-full bg-[var(--foreground)]" />
+        <span className="innergy-typing-dot h-1.5 w-1.5 rounded-full bg-[var(--foreground)]" />
       </div>
     </div>
   );
@@ -254,11 +254,11 @@ function Avatar({ who }: { who: "bot" | "user" }) {
       <img
         src={COACH_AVATAR_SRC}
         alt={COACH_NAME}
-        className="h-8 w-8 shrink-0 rounded-full border border-[#E7D8B5] object-cover"
+        className="h-8 w-8 shrink-0 rounded-full border border-[var(--container-light)] object-cover"
       />
     ) : (
       <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2A1E17] font-serif text-sm italic text-[#FBF3DE] ring-1 ring-[#E7D8B5]"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--container-dark)] font-serif text-sm italic text-[var(--background)] ring-1 ring-[var(--container-light)]"
         title={COACH_NAME}
       >
         i
@@ -268,7 +268,7 @@ function Avatar({ who }: { who: "bot" | "user" }) {
   // User avatar — generic silhouette until we wire per-session identity.
   return (
     <div
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E7D8B5] text-[#2A1E17] ring-1 ring-[#E7D8B5]"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--container-light)] text-[var(--foreground)] ring-1 ring-[var(--container-light)]"
       title="You"
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
@@ -307,9 +307,9 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
         <span className="font-medium">{label}</span>
         <span>{Math.round(value * 100)}%</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E7D8B5]">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--container-light)]">
         <div
-          className="h-full rounded-full bg-[#E5B04A] transition-all duration-300 ease-out"
+          className="h-full rounded-full bg-[var(--accent-pink)] transition-all duration-300 ease-out"
           style={{ width: `${Math.max(4, value * 100)}%` }}
         />
       </div>
@@ -325,20 +325,20 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
       return (
         <div className="flex items-end justify-end gap-2">
           <div className="flex max-w-[85%] flex-col items-end gap-1">
-            <div className="w-full overflow-hidden rounded-2xl rounded-br-sm border border-[#2A1E17]/20 bg-white shadow-sm ring-1 ring-[#E7D8B5]">
-              <div className="border-b border-[#E7D8B5] bg-[#FBF3DE] px-4 py-2">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#2A1E17]">
+            <div className="w-full overflow-hidden rounded-2xl rounded-br-sm border border-[var(--foreground)]/20 bg-white shadow-sm ring-1 ring-[var(--container-light)]">
+              <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
                   Q{bubble.questionNumber} of {bubble.total} · {bubble.sectionName}
                 </div>
-                <div className="mt-1 text-sm leading-relaxed text-[#2A1E17]">
+                <div className="mt-1 text-sm leading-relaxed text-[var(--foreground)]">
                   {bubble.stem}
                 </div>
               </div>
               <div className="flex items-start gap-3 px-4 py-2.5">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#2A1E17] text-xs font-semibold text-white">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--foreground)] text-xs font-semibold text-white">
                   {bubble.optionLabel}
                 </span>
-                <span className="text-sm leading-relaxed text-[#2A1E17]">{bubble.optionText}</span>
+                <span className="text-sm leading-relaxed text-[var(--foreground)]">{bubble.optionText}</span>
               </div>
             </div>
             <span className="text-[10px] text-[#8A7868]">{time}</span>
@@ -350,10 +350,10 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
     return (
       <div className="flex items-end justify-end gap-2">
         <div className="flex max-w-[80%] flex-col items-end gap-1">
-          <div className="rounded-2xl rounded-br-sm bg-[#2A1E17] px-4 py-2 text-sm text-white shadow-sm">
+          <div className="rounded-2xl rounded-br-sm bg-[var(--container-dark)] px-4 py-2 text-sm text-white shadow-sm">
             {bubble.body}
           </div>
-          <span className="text-[10px] text-[#8A7868]">{time}</span>
+          <span className="text-[10px] text-[var(--foreground)] opacity-60">{time}</span>
         </div>
         <Avatar who="user" />
       </div>
@@ -368,7 +368,7 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
           <img
             src={bubble.imageUrl}
             alt="Your results chart"
-            className="rounded-2xl border border-[#E7D8B5] bg-white shadow-sm"
+            className="rounded-2xl border border-[var(--container-light)] bg-white shadow-sm"
           />
           <span className="text-[10px] text-[#8A7868]">{time}</span>
         </div>
@@ -386,7 +386,7 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
         ) : overall ? (
           <OverallResultCard {...overall} />
         ) : (
-          <div className="whitespace-pre-wrap rounded-2xl rounded-bl-sm border-l-[3px] border-[#E5B04A] bg-white px-4 py-2.5 text-sm leading-relaxed text-[#2A1E17] shadow-sm ring-1 ring-[#E7D8B5]">
+          <div className="whitespace-pre-wrap rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white px-4 py-2.5 text-sm leading-relaxed text-[var(--foreground)] shadow-sm ring-1 ring-[var(--container-light)]">
             <LinkifiedText text={bubble.body} />
           </div>
         )}
@@ -497,24 +497,24 @@ function parseOverallResult(text: string): OverallResult | null {
 
 function DimensionResultCard({ title, score, max, band, body }: DimensionResult) {
   return (
-    <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[#E5B04A] bg-white shadow-sm ring-1 ring-[#E7D8B5]">
-      <div className="border-b border-[#E7D8B5] bg-[#FBF3DE] px-4 py-2.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#C9942B]">
+    <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
+      <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-2.5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--accent-pink)] opacity-80">
           Result
         </div>
-        <div className="mt-0.5 font-serif text-base font-semibold text-[#2A1E17]">{title}</div>
+        <div className="mt-0.5 font-serif-heading text-base font-semibold text-[var(--foreground)]">{title}</div>
       </div>
       <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
-        <span className="inline-flex items-baseline gap-1 rounded-lg bg-[#2A1E17] px-2.5 py-1 text-white">
+        <span className="inline-flex items-baseline gap-1 rounded-lg bg-[var(--foreground)] px-2.5 py-1 text-white">
           <span className="font-mono text-base font-semibold">{score}</span>
           <span className="font-mono text-xs text-white/60">/ {max}</span>
         </span>
-        <span className="inline-flex items-center rounded-full bg-[#F2C84B] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#2A1E17]">
+        <span className="inline-flex items-center rounded-full bg-[var(--accent-yellow)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
           {band}
         </span>
       </div>
       {body && (
-        <p className="whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-[#2A1E17]">
+        <p className="whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-[var(--foreground)]">
           {body}
         </p>
       )}
@@ -524,22 +524,22 @@ function DimensionResultCard({ title, score, max, band, body }: DimensionResult)
 
 function OverallResultCard({ title, sections, overallScore, overallMax, bandLabel, body }: OverallResult) {
   return (
-    <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[#E5B04A] bg-white shadow-sm ring-1 ring-[#E7D8B5]">
-      <div className="border-b border-[#E7D8B5] bg-[#FBF3DE] px-4 py-3">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#C9942B]">
+    <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
+      <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--accent-pink)] opacity-80">
           Overall
         </div>
-        <div className="mt-0.5 font-serif text-base font-semibold text-[#2A1E17]">{title}</div>
+        <div className="mt-0.5 font-serif-heading text-base font-semibold text-[var(--foreground)]">{title}</div>
         {(overallScore || bandLabel) && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {overallScore && overallMax && (
-              <span className="inline-flex items-baseline gap-1 rounded-lg bg-[#2A1E17] px-2.5 py-1 text-white">
+              <span className="inline-flex items-baseline gap-1 rounded-lg bg-[var(--container-dark)] px-2.5 py-1 text-white">
                 <span className="font-mono text-base font-semibold">{overallScore}</span>
                 <span className="font-mono text-xs text-white/60">/ {overallMax}</span>
               </span>
             )}
             {bandLabel && (
-              <span className="inline-flex items-center rounded-full bg-[#F2C84B] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#2A1E17]">
+              <span className="inline-flex items-center rounded-full bg-[var(--accent-yellow)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
                 {bandLabel}
               </span>
             )}
@@ -547,14 +547,14 @@ function OverallResultCard({ title, sections, overallScore, overallMax, bandLabe
         )}
       </div>
       {sections.length > 0 && (
-        <div className="divide-y divide-[#E7D8B5]">
+        <div className="divide-y divide-[var(--container-light)]">
           {sections.map((s) => (
             <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-[#10B981]" /> {/* Status dot */}
-                <span className="text-sm font-medium text-[#2A1E17]">{s.label}</span>
+                <span className="text-sm font-medium text-[var(--foreground)]">{s.label}</span>
               </div>
-              <span className="font-mono text-sm text-[#2A1E17]">
+              <span className="font-mono text-sm text-[var(--foreground)]">
                 {s.score}
                 <span className="text-[#8A7868]"> / {s.max}</span>
               </span>
@@ -563,8 +563,8 @@ function OverallResultCard({ title, sections, overallScore, overallMax, bandLabe
         </div>
       )}
       {body && (
-        <div className="border-t border-[#E7D8B5] bg-[#FBF3DE]/50 px-4 py-3">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#2A1E17]">
+        <div className="border-t border-[var(--container-light)] bg-[var(--background)]/50 px-4 py-3">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--foreground)]">
             {body}
           </p>
         </div>
@@ -592,7 +592,7 @@ function LinkifiedText({ text }: { text: string }) {
               href={part}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-[#2A1E17] underline underline-offset-2 hover:text-[#3B2B20]"
+              className="font-medium text-[var(--foreground)] underline underline-offset-2 hover:text-[#3B2B20]"
             >
               {part}
             </a>
@@ -658,7 +658,7 @@ function WidgetView({
         <button
           disabled={busy}
           onClick={() => onSubmit("RESULTS", "Show me my results")}
-          className="w-full rounded-xl bg-[#FBF3DE] px-5 py-3 text-sm font-medium text-[#2A1E17] transition hover:bg-[#E7D8B5] disabled:opacity-50"
+          className="w-full rounded-xl bg-[var(--container-light)] px-5 py-3 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--accent-yellow)] disabled:opacity-50"
         >
           View my results
         </button>
@@ -690,11 +690,11 @@ function WelcomeWidget({
           disabled={busy}
           onClick={onStart}
           aria-label="Start assessment"
-          className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#2A1E17] text-lg text-white shadow-sm transition hover:bg-[#3B2B20] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2A1E17] focus-visible:ring-offset-2 disabled:opacity-50"
+          className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--foreground)] text-lg text-white shadow-sm transition hover:bg-[#3B2B20] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--foreground)] focus-visible:ring-offset-2 disabled:opacity-50"
         >
           ▶
         </button>
-        <h2 className="font-serif text-xl text-[#2A1E17]">Ready when you are</h2>
+        <h2 className="font-serif text-xl text-[var(--foreground)]">Ready when you are</h2>
         <p className="text-sm text-[#8A7868]">
           25 quick questions across 3 dimensions. About 10–12 minutes.
         </p>
@@ -703,14 +703,14 @@ function WelcomeWidget({
         <button
           disabled={busy}
           onClick={onStart}
-          className="flex-1 rounded-xl bg-[#2A1E17] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-[#3B2B20] disabled:opacity-50"
+          className="flex-1 rounded-xl bg-[var(--accent-pink)] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Starting…" : "Let's begin →"}
         </button>
         <button
           disabled={busy}
           onClick={onLater}
-          className="flex-1 rounded-xl border border-[#E7D8B5] bg-white px-5 py-3 text-sm font-medium text-[#2A1E17] transition hover:bg-[#FBF3DE] disabled:opacity-50"
+          className="flex-1 rounded-xl border border-[var(--container-light)] bg-white px-5 py-3 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--background)] disabled:opacity-50"
         >
           Maybe later
         </button>
@@ -749,13 +749,13 @@ function TextInputWidget({
         onChange={(e) => setVal(e.target.value)}
         placeholder={placeholder}
         disabled={busy}
-        className="flex-1 rounded-xl border border-[#E7D8B5] bg-white px-4 py-3 text-sm shadow-sm outline-none ring-[#2A1E17]/30 transition focus:ring-2 disabled:bg-[#FBF3DE]"
+        className="flex-1 rounded-xl border border-[var(--container-light)] bg-white px-4 py-3 text-sm shadow-sm outline-none ring-[var(--foreground)]/30 transition focus:ring-2 disabled:bg-[var(--background)]"
       />
       <button
         type="submit"
         disabled={busy || !val.trim()}
         aria-label="Send"
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#EA5E5E] text-white shadow-sm transition hover:bg-[#D54D4D] disabled:opacity-40"
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--accent-pink)] text-white shadow-sm transition hover:bg-[var(--accent-pink)] disabled:opacity-40"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M5 12h14" />
@@ -785,10 +785,10 @@ function QuestionWidget({
   return (
     <div className="space-y-4">
       <div>
-        <div className="inline-flex items-center rounded-full bg-[#F2C84B] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#2A1E17]">
+        <div className="inline-flex items-center rounded-full bg-[var(--accent-yellow)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
           {widget.sectionName}
         </div>
-        <h3 className="mt-2 text-base font-semibold leading-relaxed text-[#2A1E17]">
+        <h3 className="mt-2 font-serif-heading text-lg font-semibold leading-relaxed text-[var(--foreground)]">
           {widget.stem}
         </h3>
       </div>
@@ -803,8 +803,8 @@ function QuestionWidget({
               className={
                 "group flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition " +
                 (isSelected
-                  ? "border-[#2A1E17] bg-[#2A1E17] text-white shadow-sm"
-                  : "border-[#E7D8B5] bg-white text-[#2A1E17] hover:border-[#2A1E17]/40 hover:bg-[#FBF3DE]")
+                  ? "border-[var(--foreground)] bg-[var(--foreground)] text-white shadow-sm"
+                  : "border-[var(--container-light)] bg-white text-[var(--foreground)] hover:border-[var(--foreground)]/40 hover:bg-[var(--background)]")
               }
             >
               <span
@@ -812,7 +812,7 @@ function QuestionWidget({
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold " +
                   (isSelected
                     ? "border-white/40 bg-white/10 text-white"
-                    : "border-[#E7D8B5] bg-white text-[#2A1E17] group-hover:border-[#2A1E17]/50")
+                    : "border-[var(--container-light)] bg-white text-[var(--foreground)] group-hover:border-[var(--foreground)]/50")
                 }
               >
                 {o.label}
@@ -839,7 +839,7 @@ function QuestionWidget({
             optionText: opt.text,
           });
         }}
-        className="w-full rounded-xl bg-[#2A1E17] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#3B2B20] disabled:opacity-40"
+        className="w-full rounded-xl bg-[var(--foreground)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#3B2B20] disabled:opacity-40"
       >
         {busy ? "Sending…" : selected ? "Submit answer →" : "Choose an option"}
       </button>
@@ -859,14 +859,14 @@ function YesNoWidget({
       <button
         disabled={busy}
         onClick={() => onSubmit("YES", "Yes")}
-        className="flex-1 rounded-xl bg-[#2A1E17] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#3B2B20] disabled:opacity-50"
+        className="flex-1 rounded-xl bg-[var(--foreground)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#3B2B20] disabled:opacity-50"
       >
         Yes
       </button>
       <button
         disabled={busy}
         onClick={() => onSubmit("NO", "No")}
-        className="flex-1 rounded-xl border border-[#E7D8B5] bg-white px-5 py-3 text-sm font-medium text-[#2A1E17] transition hover:border-[#2A1E17]/50 hover:bg-[#FBF3DE] disabled:opacity-50"
+        className="flex-1 rounded-xl border border-[var(--container-light)] bg-white px-5 py-3 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--foreground)]/50 hover:bg-[var(--background)] disabled:opacity-50"
       >
         No
       </button>
@@ -881,10 +881,10 @@ function ResultsWidget({ widget }: { widget: Extract<Widget, { kind: "results" }
       <img
         src={widget.imageUrl}
         alt="Your scores"
-        className="mx-auto w-full max-w-sm rounded-xl border border-[#E7D8B5]"
+        className="mx-auto w-full max-w-sm rounded-xl border border-[var(--container-light)]"
       />
-      <div className="rounded-xl bg-[#2A1E17] p-4 text-white">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-[#E5B04A]">
+      <div className="rounded-xl bg-[var(--foreground)] p-4 text-white">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-yellow)]">
           Overall
         </div>
         <div className="mt-1 flex items-baseline justify-between">
@@ -899,12 +899,12 @@ function ResultsWidget({ widget }: { widget: Extract<Widget, { kind: "results" }
         {widget.dimensions.map((d) => (
           <div
             key={d.name}
-            className="rounded-xl border border-[#E7D8B5] bg-white p-3 text-center"
+            className="rounded-xl border border-[var(--container-light)] bg-white p-3 text-center"
           >
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-[#2A1E17]">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
               {d.name}
             </div>
-            <div className="mt-1 font-mono text-sm text-[#2A1E17]">
+            <div className="mt-1 font-mono text-sm text-[var(--foreground)]">
               {d.score}
               <span className="text-[#8A7868]"> / {d.maxScore}</span>
             </div>

@@ -23,10 +23,10 @@ export async function renderResultsCircle(
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
-const BG = "#FBF3DE";        // warm cream page/background
-const STROKE = "#FBF3DE";    // slice dividers — match bg for clean breaks
-const TEXT_DARK = "#2A1E17"; // primary ink
-const TEXT_MUTED = "#8A7868";
+const BG = "#FFFAEF";        // warm cream page/background
+const STROKE = "#FFFAEF";    // slice dividers — match bg for clean breaks
+const TEXT_DARK = "#36211B"; // primary ink
+const TEXT_MUTED = "#8A7868"; // using hex for now, could be 0.6 opacity
 const RIM = "#E7D8B5";       // subtle border ring
 
 function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: string): string {
@@ -59,13 +59,13 @@ function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: 
         <path d="${d}" fill="${seg.colorHex}" stroke="${STROKE}" stroke-width="6" stroke-linejoin="round"/>
         <text x="${tx.toFixed(2)}" y="${(ty - scoreSize * 0.15).toFixed(2)}"
               text-anchor="middle" dominant-baseline="middle"
-              font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+              font-family="'Montserrat', sans-serif"
               font-size="${scoreSize}" fill="#FFFFFF" font-weight="800" letter-spacing="-1">
           ${seg.score}
         </text>
         <text x="${tx.toFixed(2)}" y="${(ty + scoreSize * 0.65).toFixed(2)}"
               text-anchor="middle" dominant-baseline="middle"
-              font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+              font-family="'Montserrat', sans-serif"
               font-size="${maxSize}" fill="rgba(255,255,255,0.82)" font-weight="600" letter-spacing="0.4">
           / ${seg.maxScore}
         </text>`;
@@ -77,12 +77,12 @@ function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: 
   const medallion = `
     <circle cx="${cx}" cy="${cy}" r="${(r * 0.22).toFixed(2)}" fill="${BG}" stroke="${RIM}" stroke-width="2"/>
     <text x="${cx}" y="${(cy - size * 0.01).toFixed(2)}" text-anchor="middle" dominant-baseline="middle"
-          font-family="'Inter','Helvetica Neue',Arial,sans-serif" font-size="${Math.round(size * 0.018)}"
+          font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.018)}"
           fill="${TEXT_MUTED}" font-weight="600" letter-spacing="2">
       READOUT
     </text>
     <text x="${cx}" y="${(cy + size * 0.022).toFixed(2)}" text-anchor="middle" dominant-baseline="middle"
-          font-family="Georgia,'Times New Roman',serif" font-size="${Math.round(size * 0.032)}"
+          font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.032)}"
           fill="${TEXT_DARK}" font-style="italic">
       innergy
     </text>`;
@@ -91,12 +91,12 @@ function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: 
   const titleBlock = title
     ? `
       <text x="${cx}" y="${Math.round(size * 0.08)}" text-anchor="middle"
-            font-family="Georgia,'Times New Roman',serif" font-size="${Math.round(size * 0.042)}"
+            font-family="'Fraunces', 'Playfair Display', serif" font-size="${Math.round(size * 0.042)}"
             fill="${TEXT_DARK}" font-weight="600">
         ${escape(title)}
       </text>
       <text x="${cx}" y="${Math.round(size * 0.115)}" text-anchor="middle"
-            font-family="'Inter','Helvetica Neue',Arial,sans-serif" font-size="${Math.round(size * 0.02)}"
+            font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.02)}"
             fill="${TEXT_MUTED}" letter-spacing="3" font-weight="600">
         FULL SPECTRUM LEADERSHIP
       </text>`
@@ -113,17 +113,17 @@ function buildSvg(segments: ReadonlyArray<CircleSegment>, size: number, title?: 
         <g transform="translate(${Math.round(size * 0.12)}, ${y})">
           <circle cx="10" cy="${rowH / 2 - 2}" r="9" fill="${seg.colorHex}" stroke="${STROKE}" stroke-width="2"/>
           <text x="30" y="${rowH / 2 + 3}" dominant-baseline="middle"
-                font-family="'Inter','Helvetica Neue',Arial,sans-serif" font-size="${Math.round(size * 0.024)}"
+                font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.024)}"
                 fill="${TEXT_DARK}" font-weight="600">
             ${escape(seg.label)}
           </text>
           <text x="${Math.round(size * 0.45)}" y="${rowH / 2 + 3}" dominant-baseline="middle"
-                font-family="'Inter','Helvetica Neue',Arial,sans-serif" font-size="${Math.round(size * 0.024)}"
+                font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.024)}"
                 fill="${TEXT_DARK}" font-weight="700" letter-spacing="0.5">
             ${seg.score}<tspan fill="${TEXT_MUTED}" font-weight="500"> / ${seg.maxScore}</tspan>
           </text>
           <text x="${Math.round(size * 0.6)}" y="${rowH / 2 + 3}" dominant-baseline="middle"
-                font-family="'Inter','Helvetica Neue',Arial,sans-serif" font-size="${Math.round(size * 0.021)}"
+                font-family="'Montserrat', sans-serif" font-size="${Math.round(size * 0.021)}"
                 fill="${TEXT_MUTED}" letter-spacing="1.5" font-weight="700">
             ${escape(seg.bandLabel.toUpperCase())}
           </text>
