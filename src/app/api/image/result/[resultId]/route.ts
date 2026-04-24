@@ -70,7 +70,7 @@ export async function GET(
       score: result.cognitiveScore,
       maxScore: maxFor("Section 1"),
       bandLabel: result.cognitiveBand,
-      colorHex: colorFor("Section 1", result.cognitiveBand),
+      colorHex: "#36211B", // Brand Dark Brown
     },
     {
       label: "Section 2",
@@ -78,7 +78,7 @@ export async function GET(
       score: result.relationalScore,
       maxScore: maxFor("Section 2"),
       bandLabel: result.relationalBand,
-      colorHex: colorFor("Section 2", result.relationalBand),
+      colorHex: "#FF3F64", // Brand Pink
     },
     {
       label: "Section 3",
@@ -86,7 +86,7 @@ export async function GET(
       score: result.innerScore,
       maxScore: maxFor("Section 3"),
       bandLabel: result.innerBand,
-      colorHex: colorFor("Section 3", result.innerBand),
+      colorHex: "#FFDE59", // Brand Yellow
     },
   ];
 
@@ -95,7 +95,9 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "private, max-age=86400",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
     },
   });
 }

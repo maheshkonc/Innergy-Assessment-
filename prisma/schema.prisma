@@ -291,6 +291,7 @@ model User {
   whatsappPhoneHash  String
   firstName          String?
   organisation       String?
+  email              String?
   voiceMode          VoiceMode @default(off)
   createdAt          DateTime @default(now())
   lastSeenAt         DateTime @default(now())

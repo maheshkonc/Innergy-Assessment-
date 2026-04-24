@@ -26,6 +26,7 @@ export type FsmState =
   | "ask_name"
   | "confirm_name"
   | "ask_org"
+  | "ask_email"
   | "confirm_org"
   | "question"
   | "computing"

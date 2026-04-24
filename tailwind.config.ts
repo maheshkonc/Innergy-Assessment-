@@ -6,8 +6,11 @@ const config: Config = {
     extend: {
       colors: {
         innergy: {
-          primary: "#1f2937",
-          accent: "#0ea5e9",
+          background: "#FFFAEF",
+          pink: "#FF3F64",
+          yellow: "#FFDE59",
+          brown: "#36211B",
+          sand: "#F5ECDF",
         },
       },
     },

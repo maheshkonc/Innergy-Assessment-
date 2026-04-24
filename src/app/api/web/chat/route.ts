@@ -247,6 +247,10 @@ async function renderResumeActions(
       await pushTemplate("ask_organisation", { name: user.firstName ?? "" });
       break;
 
+    case "ask_email":
+      await pushTemplate("ask_email", { name: user.firstName ?? "" });
+      break;
+
     case "question": {
       const idx = ctx.currentQuestionIndex ?? 1;
       const questions = await prisma.section.findMany({
@@ -292,9 +296,6 @@ async function renderResumeActions(
       break;
     }
 
-    case "coaching_interest":
-      await pushTemplate("coaching_interest_prompt");
-      break;
 
     case "closed":
     case "results":
@@ -367,6 +368,9 @@ async function buildWidget(
     case "ask_org":
       return { kind: "text_input", placeholder: "Your organisation" };
 
+    case "ask_email":
+      return { kind: "text_input", placeholder: "Your work email" };
+
     case "question": {
       const idx = ctx.currentQuestionIndex ?? 1;
       const questions = await loadOrderedQuestions(db, session.instrumentVersionId);
@@ -385,8 +389,6 @@ async function buildWidget(
     case "debrief_cta":
       return { kind: "yes_no", context: "debrief_cta" };
 
-    case "coaching_interest":
-      return { kind: "yes_no", context: "coaching_interest" };
 
     case "closed":
     case "results": {

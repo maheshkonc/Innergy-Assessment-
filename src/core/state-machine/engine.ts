@@ -55,12 +55,12 @@ export async function handleInbound(
       return handleAskName(prisma, input, ctx, actions);
     case "ask_org":
       return handleAskOrg(prisma, input, ctx, actions);
+    case "ask_email":
+      return handleAskEmail(prisma, input, ctx, actions);
     case "question":
       return handleQuestion(prisma, input, ctx, actions);
     case "debrief_cta":
       return handleDebriefCta(prisma, input, ctx, actions);
-    case "coaching_interest":
-      return handleCoachingInterest(prisma, input, ctx, actions);
     case "results":
     case "closed":
       return handlePostFlow(prisma, input, ctx, actions);
@@ -137,6 +137,28 @@ async function handleAskOrg(
   }
   await prisma.user.update({ where: { id: input.user.id }, data: { organisation: org } });
   const name = input.user.firstName ?? org;
+  const body = await render(prisma, "ask_email", input.tenant, { name });
+  actions.push({ kind: "text", body });
+  return { actions, newContext: { state: "ask_email" } };
+}
+
+async function handleAskEmail(
+  prisma: PrismaClient,
+  input: HandleInboundInput,
+  _ctx: FsmContext,
+  actions: OutboundAction[],
+): Promise<HandleInboundResult> {
+  const email = sanitiseFreeText(input.text);
+  if (!email || !email.includes("@")) {
+    const body = await render(prisma, "invalid_answer", input.tenant, {});
+    actions.push({ kind: "text", body });
+    return { actions, newContext: { state: "ask_email" } };
+  }
+  await prisma.user.update({
+    where: { id: input.user.id },
+    data: { email } as any
+  });
+  const name = input.user.firstName ?? "there";
 
   // PDF step 3 close-out: "Perfect. Let's begin, [Name]."
   const ack = await render(prisma, "org_ack", input.tenant, { name }, { allowMissing: true });
@@ -246,47 +268,7 @@ async function handleDebriefCta(
   const body = await render(prisma, bodyKey, input.tenant, {});
   actions.push({ kind: "text", body });
 
-  // Follow with coaching-interest prompt regardless (FR-8.3).
-  const prompt = await render(prisma, "coaching_interest_prompt", input.tenant, {});
-  actions.push({ kind: "text", body: prompt });
-  return { actions, newContext: { ...ctx, state: "coaching_interest" } };
-}
-
-async function handleCoachingInterest(
-  prisma: PrismaClient,
-  input: HandleInboundInput,
-  ctx: FsmContext,
-  actions: OutboundAction[],
-): Promise<HandleInboundResult> {
-  const reply = input.text.trim().toLowerCase();
-  const isYes = reply === "yes" || reply === "y";
-
-  if (isYes) {
-    // Enqueue a coach-notification job. The notifications worker picks it up.
-    await prisma.notification.create({
-      data: {
-        tenantId: input.tenant.id,
-        userId: input.user.id,
-        sessionId: input.session.id,
-        type: "coaching_interest",
-        channel: "email", // overridden from tenant config in the worker
-        payload: {},
-        status: "pending",
-      },
-    });
-  }
-
-  // PDF step 15: send a YES / NO acknowledgement before the closing message.
-  const interestKey = isYes ? "coaching_interest_yes" : "coaching_interest_no";
-  const interestAck = await render(
-    prisma,
-    interestKey,
-    input.tenant,
-    { name: input.user.firstName ?? "there" },
-    { allowMissing: true },
-  );
-  actions.push({ kind: "text", body: interestAck });
-
+  // PDF §15: Transition directly to closing message and terminal state.
   const closing = await render(
     prisma,
     "closing",
@@ -295,12 +277,14 @@ async function handleCoachingInterest(
     { allowMissing: true },
   );
   actions.push({ kind: "text", body: closing });
+
   return {
     actions,
     newContext: { ...ctx, state: "closed" },
     terminalStatus: "completed",
   };
 }
+
 
 async function handlePostFlow(
   _prisma: PrismaClient,

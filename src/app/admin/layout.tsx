@@ -11,6 +11,7 @@ const NAV: Array<{ href: Route; label: string }> = [
   { href: "/admin/instruments", label: "Instruments" },
   { href: "/admin/questions", label: "Questions" },
   { href: "/admin/scoring", label: "Scoring" },
+  { href: "/admin/results", label: "Results" },
   { href: "/admin/templates", label: "Templates" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/analytics", label: "Analytics" },

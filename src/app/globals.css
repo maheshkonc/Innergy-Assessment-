@@ -5,11 +5,11 @@
 @tailwind utilities;
 
 :root {
-  --background: rgb(252 248 237);
+  --background: #FFFAEF;
   --foreground: #36211B;
   --accent-pink: #FF3F64;
   --accent-yellow: #FFDE59;
-  --container-light: #E7D8B5;
+  --container-light: #F5ECDF;
   --container-dark: #36211B;
 
   --font-serif: "Fraunces", "Playfair Display", serif;

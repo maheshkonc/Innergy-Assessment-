@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
+
+const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 type WebAction = { kind: "text"; body: string } | { kind: "image"; imageUrl: string };
 
@@ -47,6 +50,12 @@ type Bubble =
     stem: string;
     optionLabel: "A" | "B" | "C" | "D";
     optionText: string;
+  })
+  | (BubbleBase & {
+    author: "bot";
+    kind: "result_chart";
+    dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
+    imageUrl: string;
   });
 
 // Distributive Omit — plain Omit over a union collapses shared keys and
@@ -111,11 +120,23 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
           return;
         }
         const data = (await res.json()) as ChatResponse;
-        const incoming: Bubble[] = data.actions.map((a) =>
-          a.kind === "text"
-            ? { author: "bot", kind: "text", body: a.body, ts: Date.now() }
-            : { author: "bot", kind: "image", imageUrl: a.imageUrl, ts: Date.now() },
-        );
+        const incoming: Bubble[] = data.actions.map((a) => {
+          if (a.kind === "text") {
+            return { author: "bot", kind: "text", body: a.body, ts: Date.now() };
+          } else {
+            // If we have results data in the widget, attach it to the image bubble
+            if (data.widget.kind === "results" && a.imageUrl.includes("/api/image/result/")) {
+              return {
+                author: "bot",
+                kind: "result_chart",
+                imageUrl: a.imageUrl,
+                dimensions: data.widget.dimensions,
+                ts: Date.now(),
+              };
+            }
+            return { author: "bot", kind: "image", imageUrl: a.imageUrl, ts: Date.now() };
+          }
+        });
 
         // Reveal one bubble at a time with a typing indicator between,
         // matching the "someone is replying to you" feel.
@@ -209,7 +230,10 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
           <div className="space-y-2.5">
             {bubbles.map((b, i) => (
               <div key={i} className="innergy-bubble-in">
-                <BubbleView bubble={b} />
+                <BubbleView
+                  bubble={b}
+                  resultsData={widget?.kind === "results" ? widget : null}
+                />
               </div>
             ))}
             {typing && <TypingBubble />}
@@ -289,10 +313,10 @@ function stateLabel(state: string): string {
       return "Ready to begin";
     case "ask_name": return "Getting to know you";
     case "ask_org": return "Getting to know you";
+    case "ask_email": return "Getting to know you";
     case "question": return "Assessment in progress";
     case "computing": return "Calculating…";
     case "debrief_cta": return "Results ready";
-    case "coaching_interest": return "Wrapping up";
     case "closed":
     case "results": return "Complete";
     case "escalated": return "Paused";
@@ -317,7 +341,13 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
   );
 }
 
-function BubbleView({ bubble }: { bubble: Bubble }) {
+function BubbleView({
+  bubble,
+  resultsData,
+}: {
+  bubble: Bubble;
+  resultsData: Extract<Widget, { kind: "results" }> | null;
+}) {
   const time = formatTime(bubble.ts);
 
   if (bubble.author === "user") {
@@ -359,7 +389,26 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
       </div>
     );
   }
+  if (bubble.kind === "result_chart") {
+    return (
+      <div className="flex items-end gap-2">
+        <Avatar who="bot" />
+        <div className="flex max-w-[85%] flex-col items-start gap-1">
+          <div className="w-full min-w-[300px] overflow-hidden rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm">
+            <AssessmentDonutChart dimensions={bubble.dimensions} />
+          </div>
+          <span className="text-[10px] text-[#8A7868]">{time}</span>
+        </div>
+      </div>
+    );
+  }
+
   if (bubble.kind === "image") {
+    // If it's a result image, hide it on web because we render the real ApexChart 
+    // inside the subsequent overall result card for a cleaner interactive experience.
+    if (bubble.imageUrl.includes("/api/image/result/")) {
+      return null;
+    }
     return (
       <div className="flex items-end gap-2">
         <Avatar who="bot" />
@@ -367,7 +416,7 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={bubble.imageUrl}
-            alt="Your results chart"
+            alt="Attachment"
             className="rounded-2xl border border-[var(--container-light)] bg-white shadow-sm"
           />
           <span className="text-[10px] text-[#8A7868]">{time}</span>
@@ -440,6 +489,7 @@ type OverallResult = {
   overallMax?: string;
   bandLabel?: string;
   body: string;
+  dimensions?: Array<{ name: string; score: number; maxScore: number; band: string }>;
 };
 
 function parseOverallResult(text: string): OverallResult | null {
@@ -492,6 +542,12 @@ function parseOverallResult(text: string): OverallResult | null {
     overallMax,
     bandLabel,
     body: interpretationLines.join("\n").trim(),
+    dimensions: sections.map((s) => ({
+      name: s.label,
+      score: parseFloat(s.score),
+      maxScore: parseFloat(s.max),
+      band: "", // Not used in small chart
+    })),
   };
 }
 
@@ -522,7 +578,15 @@ function DimensionResultCard({ title, score, max, band, body }: DimensionResult)
   );
 }
 
-function OverallResultCard({ title, sections, overallScore, overallMax, bandLabel, body }: OverallResult) {
+function OverallResultCard({
+  title,
+  sections,
+  overallScore,
+  overallMax,
+  bandLabel,
+  body,
+  dimensions,
+}: OverallResult) {
   return (
     <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
       <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-3">
@@ -530,6 +594,14 @@ function OverallResultCard({ title, sections, overallScore, overallMax, bandLabe
           Overall
         </div>
         <div className="mt-0.5 font-serif-heading text-base font-semibold text-[var(--foreground)]">{title}</div>
+
+        {/* Real Interactive ApexChart in the Bubble! */}
+        {dimensions && dimensions.length > 0 && (
+          <div className="mt-4 -mb-4 bg-white/50 rounded-xl py-2">
+            <AssessmentDonutChart dimensions={dimensions} />
+          </div>
+        )}
+
         {(overallScore || bandLabel) && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {overallScore && overallMax && (
@@ -548,10 +620,10 @@ function OverallResultCard({ title, sections, overallScore, overallMax, bandLabe
       </div>
       {sections.length > 0 && (
         <div className="divide-y divide-[var(--container-light)]">
-          {sections.map((s) => (
+          {sections.map((s, i) => (
             <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#10B981]" /> {/* Status dot */}
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ["#36211B", "#FF3F64", "#FFDE59"][i % 3] }} />
                 <span className="text-sm font-medium text-[var(--foreground)]">{s.label}</span>
               </div>
               <span className="font-mono text-sm text-[var(--foreground)]">
@@ -846,7 +918,6 @@ function QuestionWidget({
     </div>
   );
 }
-
 function YesNoWidget({
   busy,
   onSubmit,
@@ -874,41 +945,156 @@ function YesNoWidget({
   );
 }
 
+
+function AssessmentDonutChart({
+  dimensions,
+}: {
+  dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
+}) {
+  const series = dimensions.map((d) => d.score);
+  const labels = dimensions.map((d) => d.name);
+
+  // Map to brand colors
+  // Section 1: Dark Brown, Section 2: Pink, Section 3: Yellow
+  const colors = ["#36211B", "#FF3F64", "#FFDE59"];
+
+  const options: any = {
+    chart: {
+      type: "donut",
+      fontFamily: "Montserrat, sans-serif",
+      toolbar: { show: false },
+    },
+    colors: colors,
+    labels: labels,
+    stroke: {
+      show: true,
+      colors: ["var(--background)"],
+      width: 4,
+    },
+    dataLabels: {
+      enabled: true,
+      style: {
+        fontSize: "12px",
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: "700",
+      },
+      dropShadow: { enabled: false },
+    },
+    plotOptions: {
+      pie: {
+        expandOnClick: false,
+        donut: {
+          size: "70%",
+          background: "transparent",
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              fontSize: "10px",
+              fontWeight: 600,
+              color: "#8A7868",
+              offsetY: -8,
+            },
+            value: {
+              show: true,
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#36211B",
+              offsetY: 8,
+              formatter: () => "REPORT",
+            },
+            total: {
+              show: true,
+              showAlways: true,
+              label: "INNERGY",
+              color: "#36211B",
+              fontSize: "9px",
+              fontWeight: 600,
+              formatter: () => "REPORT",
+            },
+          },
+        },
+      },
+    },
+    legend: {
+      position: "bottom",
+      fontSize: "11px",
+      fontWeight: 500,
+      fontFamily: "Montserrat, sans-serif",
+      markers: { radius: 12 },
+      itemMargin: { horizontal: 8, vertical: 4 },
+    },
+    tooltip: {
+      y: {
+        formatter: (val: number, { seriesIndex }: any) => {
+          const dim = dimensions[seriesIndex];
+          if (!dim) return `${val}`;
+          return `${val} / ${dim.maxScore}`;
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-sm py-2">
+      <div className="mb-4 flex flex-col items-center">
+        <div className="relative mb-4 flex h-[40px] w-full items-center justify-center overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png?v=19"
+            alt="innergy"
+            className="h-[140px] w-[140px] max-w-none object-contain"
+          />
+        </div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--foreground)] opacity-70">
+          Full Spectrum Leadership
+        </p>
+      </div>
+      <div className="min-h-[280px]">
+        <ReactApexChart options={options} series={series} type="donut" width="100%" />
+      </div>
+    </div>
+  );
+}
+
 function ResultsWidget({ widget }: { widget: Extract<Widget, { kind: "results" }> }) {
   return (
-    <div className="space-y-4">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={widget.imageUrl}
-        alt="Your scores"
-        className="mx-auto w-full max-w-sm rounded-xl border border-[var(--container-light)]"
-      />
-      <div className="rounded-xl bg-[var(--foreground)] p-4 text-white">
+    <div className="flex flex-col gap-4 py-2 innergy-bubble-in">
+      <div className="rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]/20">
+        <AssessmentDonutChart dimensions={widget.dimensions} />
+      </div>
+
+      <div className="rounded-xl bg-[var(--foreground)] p-4 text-white shadow-sm">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-yellow)]">
-          Overall
+          Overall Status
         </div>
         <div className="mt-1 flex items-baseline justify-between">
-          <div className="text-lg font-semibold">{widget.overall.band}</div>
-          <div className="font-mono text-sm">
+          <div className="flex items-baseline gap-1.5 text-3xl font-bold">
             {widget.overall.score}
-            <span className="text-white/60"> / {widget.overall.maxScore}</span>
+            <span className="text-sm font-normal text-white/50">/ {widget.overall.maxScore}</span>
+          </div>
+          <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider">
+            {widget.overall.band}
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {widget.dimensions.map((d) => (
           <div
             key={d.name}
-            className="rounded-xl border border-[var(--container-light)] bg-white p-3 text-center"
+            className="rounded-xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]"
           >
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)] opacity-60">
               {d.name}
             </div>
-            <div className="mt-1 font-mono text-sm text-[var(--foreground)]">
+            <div className="mt-1 flex items-baseline gap-1 font-serif text-lg font-bold text-[var(--foreground)]">
               {d.score}
-              <span className="text-[#8A7868]"> / {d.maxScore}</span>
+              <span className="font-sans text-[10px] font-normal text-[var(--foreground)] opacity-50">/ {d.maxScore}</span>
             </div>
-            <div className="mt-0.5 text-xs text-[#8A7868]">{d.band}</div>
+            <div className="mt-1 text-[10px] font-medium uppercase tracking-tight text-[var(--accent-pink)] opacity-80">
+              {d.band}
+            </div>
           </div>
         ))}
       </div>

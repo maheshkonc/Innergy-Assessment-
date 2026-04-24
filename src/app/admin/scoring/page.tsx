@@ -19,7 +19,7 @@ export default async function ScoringPage() {
   }
 
   const { sections, inProgressCount } = result;
-  const locked = inProgressCount > 0;
+  const locked = false; // Restriction removed per user request
 
   return (
     <div>
@@ -29,20 +29,14 @@ export default async function ScoringPage() {
         results stay pinned to the scores used at the time.
       </p>
 
-      {locked ? (
+      {inProgressCount > 0 && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <div className="font-semibold">
-            {inProgressCount} session{inProgressCount === 1 ? "" : "s"} in progress — editing is disabled.
+            {inProgressCount} session{inProgressCount === 1 ? "" : "s"} in progress.
           </div>
           <div className="mt-1 text-amber-800">
-            Changing a score now would shift the final readout for people who
-            are mid-assessment. Wait for them to finish (or abandon them from
-            the session view) before editing.
+            Note: Changes will apply immediately to people who are mid-assessment.
           </div>
-        </div>
-      ) : (
-        <div className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          No sessions in progress — safe to edit scores.
         </div>
       )}
 
@@ -122,6 +116,7 @@ async function loadData() {
     where: {
       instrumentVersionId: current.currentVersion.id,
       status: "in_progress",
+      lastMessageAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
     },
   });
 

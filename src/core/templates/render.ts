@@ -50,8 +50,9 @@ export function renderTemplate(
  */
 export function extractVariableNames(body: string): string[] {
   const names = new Set<string>();
-  for (const match of body.matchAll(VAR_RE)) {
-    if (match[1]) names.add(match[1]);
+  for (const match of Array.from(body.matchAll(VAR_RE))) {
+    const name = match[1];
+    if (name) names.add(name);
   }
-  return [...names];
+  return Array.from(names);
 }

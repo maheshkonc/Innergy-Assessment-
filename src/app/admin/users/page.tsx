@@ -26,6 +26,7 @@ export default async function UsersPage() {
           <thead>
             <tr className="border-b text-left text-xs uppercase text-slate-500">
               <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Email</th>
               <th className="px-3 py-2">Org</th>
               <th className="px-3 py-2">Tenant</th>
               <th className="px-3 py-2">Sessions</th>
@@ -37,12 +38,13 @@ export default async function UsersPage() {
             {result.users.map((u) => (
               <tr key={u.id} className="border-b">
                 <td className="px-3 py-2">{u.firstName ?? "—"}</td>
+                <td className="px-3 py-2 text-xs font-mono">{u.email ?? "—"}</td>
                 <td className="px-3 py-2">{u.organisation ?? "—"}</td>
                 <td className="px-3 py-2">{u.tenant.name}</td>
                 <td className="px-3 py-2">{u._count.sessions}</td>
                 <td className="px-3 py-2">{u._count.results}</td>
                 <td className="px-3 py-2 text-xs text-slate-500">
-                  {u.lastSeenAt.toISOString()}
+                  {u.lastSeenAt.toISOString().slice(0, 19).replace("T", " ")}
                 </td>
               </tr>
             ))}

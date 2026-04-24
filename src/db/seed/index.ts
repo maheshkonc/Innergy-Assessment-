@@ -210,12 +210,12 @@ async function seedInnergyTenant() {
 
   const coach = await prisma.coach.upsert({
     where: { id: "coach_rashmi" },
-    update: {},
+    update: { bookingUrl: "https://calendly.com/rashmii-sharma/meeting" },
     create: {
       id: "coach_rashmi",
       name: "Rashmi Sharma",
       // Placeholders — replace with real values (§12.9).
-      bookingUrl: "https://calendly.com/rashmi-innergy/30min",
+      bookingUrl: "https://calendly.com/rashmii-sharma/meeting",
       notificationChannel: "email",
       notificationAddress: "rashmi@innergy.example",
     },
