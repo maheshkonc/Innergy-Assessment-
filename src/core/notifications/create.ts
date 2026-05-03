@@ -113,3 +113,45 @@ export async function enqueueEscalationNotifications(
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
 }
+
+export interface UserReportContext {
+  tenantId: string;
+  userId: string;
+  sessionId: string;
+  email: string;
+}
+
+/**
+ * Enqueues a `user_report` email notification addressed to the leader who
+ * just completed their assessment. Idempotent per session: re-running
+ * finaliseResults (e.g. RESULTS resend path) won't enqueue a duplicate.
+ */
+export async function enqueueUserReportNotification(
+  prisma: PrismaClient,
+  ctx: UserReportContext,
+): Promise<{ created: boolean }> {
+  const existing = await prisma.notification.findFirst({
+    where: {
+      tenantId: ctx.tenantId,
+      sessionId: ctx.sessionId,
+      type: "user_report",
+      status: { in: ["pending", "sent"] },
+    },
+  });
+  if (existing) return { created: false };
+
+  await prisma.notification.create({
+    data: {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      type: "user_report",
+      channel: "email",
+      payload: {
+        recipient: { kind: "user", email: ctx.email },
+      },
+      status: "pending",
+    },
+  });
+  return { created: true };
+}

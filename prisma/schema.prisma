@@ -411,6 +411,7 @@ enum NotificationType {
   coaching_interest
   escalation
   digest
+  user_report
 }
 
 enum NotificationStatus {

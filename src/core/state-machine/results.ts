@@ -14,6 +14,8 @@ import { resolveMessageTemplate } from "../templates/resolve";
 import { renderTemplate } from "../templates/render";
 import type { LLMProvider } from "../../providers/llm/types";
 import type { OutboundAction } from "./engine";
+import { enqueueUserReportNotification } from "../notifications/create";
+import { log } from "../logger";
 
 export async function finaliseResults(
   prisma: PrismaClient,
@@ -148,6 +150,21 @@ export async function finaliseResults(
       kind: "text",
       body: renderTemplate(cta2.body, ctaVars, { allowMissing: true }),
     });
+  }
+
+  // Email the leader their report (idempotent per session). Failure here
+  // must not block the WhatsApp/web result delivery — log and continue.
+  if (user.email) {
+    try {
+      await enqueueUserReportNotification(prisma, {
+        tenantId: tenant.id,
+        userId: user.id,
+        sessionId: session.id,
+        email: user.email,
+      });
+    } catch (err) {
+      log.error({ err, sessionId: session.id }, "failed to enqueue user_report email");
+    }
   }
 
   return { actions, resultId: result.id, interpretation };

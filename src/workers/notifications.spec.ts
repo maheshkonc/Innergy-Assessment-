@@ -41,6 +41,9 @@ describe("notifications worker renderBody", () => {
       inner: null,
       overall: null,
       generatedAt: null,
+      interpretation: null,
+      lowestDimensionName: null,
+      coach: null,
     });
     expect(body).toContain("Safety escalation");
     expect(body).toContain("Asha");
@@ -67,6 +70,9 @@ describe("notifications worker renderBody", () => {
       inner: { score: 28, band: "Developing" },
       overall: { score: 90, band: "Emerging leader" },
       generatedAt: "2026-04-20T12:00:00.000Z",
+      interpretation: null,
+      lowestDimensionName: null,
+      coach: null,
     });
     expect(body).toContain("Ravi");
     expect(body).toContain("Innergy");
@@ -85,6 +91,9 @@ describe("notifications worker renderBody", () => {
       inner: null,
       overall: null,
       generatedAt: null,
+      interpretation: null,
+      lowestDimensionName: null,
+      coach: null,
     });
     expect(body).toContain("Ravi");
     expect(body).toContain("coaching conversation");
