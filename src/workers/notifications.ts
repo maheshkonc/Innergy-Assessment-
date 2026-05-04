@@ -83,6 +83,8 @@ async function tick() {
       });
       log.error({ err, notificationId: n.id, attempts }, "notification delivery failed");
     }
+    // Respect rate limits (e.g. Resend 2 req/sec)
+    await new Promise((r) => setTimeout(r, 600));
   }
 }
 
