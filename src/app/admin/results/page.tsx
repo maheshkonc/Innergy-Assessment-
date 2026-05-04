@@ -1,6 +1,7 @@
 import { prisma } from "@/db/client";
 import { DbStatusBanner } from "../DbStatusBanner";
 import Link from "next/link";
+import { DeleteButton } from "../DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function ResultsListPage() {
                             <th className="px-3 py-2">Status</th>
                             <th className="px-3 py-2">Answers</th>
                             <th className="px-3 py-2">Last Message</th>
-                            <th className="px-3 py-1"></th>
+                            <th className="px-3 py-2 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -70,13 +71,18 @@ export default async function ResultsListPage() {
                                 <td className="px-3 py-3 text-xs text-slate-500">
                                     {s.lastMessageAt.toISOString().slice(0, 16).replace("T", " ")}
                                 </td>
-                                <td className="px-3 py-3 text-right">
+                                <td className="px-3 py-3 text-right flex justify-end gap-3">
                                     <Link
                                         href={`/admin/results/${s.id}`}
                                         className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
                                     >
                                         View Answers
                                     </Link>
+                                    <DeleteButton
+                                        endpoint="/api/admin/sessions"
+                                        id={s.id}
+                                        confirmMessage="Delete this assessment session and its results? This cannot be undone."
+                                    />
                                 </td>
                             </tr>
                         ))}

@@ -1,5 +1,6 @@
 import { prisma } from "@/db/client";
 import { DbStatusBanner } from "../DbStatusBanner";
+import { DeleteButton } from "../DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function UsersPage() {
               <th className="px-3 py-2">Sessions</th>
               <th className="px-3 py-2">Results</th>
               <th className="px-3 py-2">Last seen</th>
+              <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -45,6 +47,13 @@ export default async function UsersPage() {
                 <td className="px-3 py-2">{u._count.results}</td>
                 <td className="px-3 py-2 text-xs text-slate-500">
                   {u.lastSeenAt.toISOString().slice(0, 19).replace("T", " ")}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <DeleteButton
+                    endpoint="/api/admin/users"
+                    id={u.id}
+                    confirmMessage={`Delete user ${u.firstName ?? "Anonymous"}? This will remove all their sessions and results.`}
+                  />
                 </td>
               </tr>
             ))}

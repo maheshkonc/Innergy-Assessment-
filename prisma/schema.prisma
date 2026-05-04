@@ -1,8 +1,3 @@
-// Innergy FLS — Prisma schema.
-// See PRD §8 for the reference data model.
-// Every domain row carries tenant_id (FR-1.1). Row-level security is layered
-// on top in migrations (see prisma/migrations/rls.sql once created).
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearchPostgres"]
@@ -11,61 +6,35 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // Supabase on Vercel: DATABASE_URL points at the transaction pooler (port
-  // 6543) so serverless functions don't exhaust the connection limit. The
-  // pooler strips PREPARE statements though, so migrations go through
-  // DIRECT_URL (direct connection, port 5432).
   directUrl = env("DIRECT_URL")
 }
 
-// =============================================================
-// Tenancy & people
-// =============================================================
-
-enum WhatsAppRoutingMode {
-  dedicated
-  shared
-}
-
-enum TenantStatus {
-  active
-  disabled
-}
-
 model Tenant {
-  id                String              @id @default(cuid())
-  name              String
-  slug              String              @unique
-  // Inbound-number → tenant mapping when routing mode is `dedicated`.
-  whatsappNumber    String?             @unique
-  whatsappMode      WhatsAppRoutingMode @default(shared)
-  // Deep-link payload (e.g. "START_innergy") used in shared-number mode.
-  triggerPayload    String?             @unique
-  logoUrl           String?
-  primaryColor      String?
-  secondaryColor    String?
-  linkedinUrl       String?
-  closingMessage    String?
-  status            TenantStatus        @default(active)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-
-  coaches           TenantCoach[]
-  featureFlags      FeatureFlag[]
-  instruments       TenantInstrument[]
-  users             User[]
-  sessions          Session[]
-  results           Result[]
-  notifications     Notification[]
-  messageTemplates  MessageTemplate[]
-  events            Event[]
+  id               String              @id @default(cuid())
+  name             String
+  slug             String              @unique
+  whatsappNumber   String?             @unique
+  whatsappMode     WhatsAppRoutingMode @default(shared)
+  triggerPayload   String?             @unique
+  logoUrl          String?
+  primaryColor     String?
+  secondaryColor   String?
+  linkedinUrl      String?
+  closingMessage   String?
+  status           TenantStatus        @default(active)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  events           Event[]
+  featureFlags     FeatureFlag[]
+  messageTemplates MessageTemplate[]
+  notifications    Notification[]
+  results          Result[]
+  sessions         Session[]
+  coaches          TenantCoach[]
+  instruments      TenantInstrument[]
+  users            User[]
 
   @@index([slug])
-}
-
-enum NotificationChannel {
-  email
-  whatsapp
 }
 
 model Coach {
@@ -76,74 +45,63 @@ model Coach {
   notificationAddress String
   linkedinUrl         String?
   createdAt           DateTime            @default(now())
-
-  tenants             TenantCoach[]
   notifications       Notification[]
+  tenants             TenantCoach[]
 }
 
 model TenantCoach {
-  tenantId String
-  coachId  String
+  tenantId  String
+  coachId   String
   isPrimary Boolean @default(true)
-
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  coach    Coach  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coach     Coach   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, coachId])
 }
 
 model FeatureFlag {
-  id        String  @id @default(cuid())
-  tenantId  String
-  key       String
-  value     String   // stored as string; caller parses boolean/int as needed
-
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  key      String
+  value    String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, key])
 }
 
-// =============================================================
-// Content: dimensions, instruments, questions, options, bands
-// =============================================================
-
 model Dimension {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  description  String?
-  internalTag  String?
-  sections     Section[]
+  id             String          @id @default(cuid())
+  name           String          @unique
+  description    String?
+  internalTag    String?
   dimensionBands DimensionBand[]
+  sections       Section[]
 }
 
 model Instrument {
-  id              String              @id @default(cuid())
-  name            String              @unique
-  description     String?
-  currentVersionId String?            @unique
-
-  versions         InstrumentVersion[] @relation("InstrumentVersions")
+  id               String              @id @default(cuid())
+  name             String              @unique
+  description      String?
+  currentVersionId String?             @unique
   currentVersion   InstrumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions         InstrumentVersion[] @relation("InstrumentVersions")
 }
 
 model InstrumentVersion {
-  id              String   @id @default(cuid())
-  instrumentId    String
-  versionNumber   Int
-  publishedAt     DateTime?
-  publishedBy     String?
-  // metadata includes estimated duration, dimension order, display config.
-  metadata        Json
-
-  instrument      Instrument @relation("InstrumentVersions", fields: [instrumentId], references: [id], onDelete: Cascade)
-  asCurrentOf     Instrument? @relation("CurrentVersion")
-
-  sections        Section[]
-  dimensionBands  DimensionBand[]
-  overallBands    OverallBand[]
+  id                String             @id @default(cuid())
+  instrumentId      String
+  versionNumber     Int
+  publishedAt       DateTime?
+  publishedBy       String?
+  metadata          Json
+  dimensionBands    DimensionBand[]
+  asCurrentOf       Instrument?        @relation("CurrentVersion")
+  instrument        Instrument         @relation("InstrumentVersions", fields: [instrumentId], references: [id], onDelete: Cascade)
+  overallBands      OverallBand[]
+  results           Result[]
+  sections          Section[]
+  sessions          Session[]
   tenantInstruments TenantInstrument[]
-  sessions        Session[]
-  results         Result[]
 
   @@unique([instrumentId, versionNumber])
 }
@@ -151,25 +109,22 @@ model InstrumentVersion {
 model TenantInstrument {
   tenantId            String
   instrumentVersionId String
-  effectiveFrom       DateTime @default(now())
-
-  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  effectiveFrom       DateTime          @default(now())
   instrumentVersion   InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, instrumentVersionId])
 }
 
 model Section {
-  id                  String   @id @default(cuid())
+  id                  String            @id @default(cuid())
   instrumentVersionId String
   dimensionId         String
   displayOrder        Int
-  // References a message_template key, e.g. "section_intro_cognitive".
   introTemplateKey    String
-
-  instrumentVersion   InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
-  dimension           Dimension         @relation(fields: [dimensionId], references: [id])
   questions           Question[]
+  dimension           Dimension         @relation(fields: [dimensionId], references: [id])
+  instrumentVersion   InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
 
   @@unique([instrumentVersionId, displayOrder])
 }
@@ -180,72 +135,55 @@ model Question {
   stem         String
   displayOrder Int
   internalTag  String?
-
-  section      Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  options      Option[]
   answers      Answer[]
+  options      Option[]
+  section      Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@unique([sectionId, displayOrder])
 }
 
-enum OptionLabel {
-  A
-  B
-  C
-  D
-}
-
 model Option {
-  id           String   @id @default(cuid())
+  id           String      @id @default(cuid())
   questionId   String
   label        OptionLabel
   text         String
   score        Int
   displayOrder Int
   internalTag  String?
-
-  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   answers      Answer[]
+  question     Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([questionId, label])
   @@unique([questionId, displayOrder])
 }
 
 model DimensionBand {
-  id                   String   @id @default(cuid())
-  instrumentVersionId  String
-  dimensionId          String
-  minScore             Int
-  maxScore             Int
-  bandLabel            String
+  id                     String            @id @default(cuid())
+  instrumentVersionId    String
+  dimensionId            String
+  minScore               Int
+  maxScore               Int
+  bandLabel              String
   interpretationTemplate String
-  bandColorHex         String?
-
-  instrumentVersion    InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
-  dimension            Dimension         @relation(fields: [dimensionId], references: [id])
+  bandColorHex           String?
+  dimension              Dimension         @relation(fields: [dimensionId], references: [id])
+  instrumentVersion      InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
 
   @@index([instrumentVersionId, dimensionId])
 }
 
 model OverallBand {
-  id                    String @id @default(cuid())
-  instrumentVersionId   String
-  minScore              Int
-  maxScore              Int
-  bandLabel             String
+  id                     String            @id @default(cuid())
+  instrumentVersionId    String
+  minScore               Int
+  maxScore               Int
+  bandLabel              String
   interpretationTemplate String
-
-  instrumentVersion     InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
+  instrumentVersion      InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
 
   @@index([instrumentVersionId])
 }
 
-// =============================================================
-// Templates (messaging + LLM prompts)
-// =============================================================
-
-// tenantId NULL = global default; non-null = tenant-specific override.
-// Lookup precedence (§6.2): tenant override → global default.
 model MessageTemplate {
   id        String   @id @default(cuid())
   key       String
@@ -254,7 +192,6 @@ model MessageTemplate {
   body      String
   updatedAt DateTime @updatedAt
   updatedBy String?
-
   tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([key, tenantId, locale])
@@ -275,79 +212,48 @@ model LlmPromptTemplate {
   @@index([key, isActive])
 }
 
-// =============================================================
-// Users, sessions, answers, results
-// =============================================================
-
-enum VoiceMode {
-  off
-  on
-}
-
 model User {
-  id                 String   @id @default(cuid())
-  tenantId           String
-  // Salted SHA-256 hash of the E.164 phone number (§9.1).
-  whatsappPhoneHash  String
-  firstName          String?
-  organisation       String?
-  email              String?
-  voiceMode          VoiceMode @default(off)
-  createdAt          DateTime @default(now())
-  lastSeenAt         DateTime @default(now())
-  deletedAt          DateTime?
-
-  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sessions           Session[]
-  results            Result[]
-  notifications      Notification[]
-  events             Event[]
+  id                String         @id @default(cuid())
+  tenantId          String
+  whatsappPhoneHash String
+  firstName         String?
+  organisation      String?
+  voiceMode         VoiceMode      @default(off)
+  createdAt         DateTime       @default(now())
+  lastSeenAt        DateTime       @default(now())
+  deletedAt         DateTime?
+  email             String?
+  events            Event[]
+  notifications     Notification[]
+  results           Result[]
+  sessions          Session[]
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, whatsappPhoneHash])
 }
 
-enum SessionStatus {
-  in_progress
-  completed
-  abandoned
-  escalated
-}
-
 model Session {
-  id                  String        @id @default(cuid())
+  id                  String            @id @default(cuid())
   tenantId            String
   userId              String
   instrumentVersionId String
-  status              SessionStatus @default(in_progress)
-  // Serialized FSM state — what step/question we're on, voice toggle, etc.
-  // Durable across backend restarts (§9.4).
+  status              SessionStatus     @default(in_progress)
   fsmState            Json
-  // Raw E.164 phone number for in-flight routing (PRD §9.1). Populated on
-  // session create; nulled when the session transitions to a terminal
-  // status (completed / abandoned / escalated). Needed so the abandonment
-  // worker can actually send reminders — the User table only holds the
-  // salted hash.
   whatsappPhone       String?
-  startedAt           DateTime      @default(now())
-  lastMessageAt       DateTime      @default(now())
+  startedAt           DateTime          @default(now())
+  lastMessageAt       DateTime          @default(now())
   completedAt         DateTime?
   abandonedAt         DateTime?
-
+  answers             Answer[]
+  events              Event[]
+  notifications       Notification[]
+  result              Result?
+  instrumentVersion   InstrumentVersion @relation(fields: [instrumentVersionId], references: [id])
   tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  instrumentVersion   InstrumentVersion @relation(fields: [instrumentVersionId], references: [id])
-  answers             Answer[]
-  result              Result?
-  notifications       Notification[]
-  events              Event[]
 
   @@index([tenantId, status])
   @@index([lastMessageAt])
-}
-
-enum InputType {
-  text
-  voice
 }
 
 model Answer {
@@ -359,53 +265,146 @@ model Answer {
   rawInputType    InputType @default(text)
   voiceTranscript String?
   answeredAt      DateTime  @default(now())
-
-  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  question        Question @relation(fields: [questionId], references: [id])
-  option          Option   @relation(fields: [optionId], references: [id])
+  option          Option    @relation(fields: [optionId], references: [id])
+  question        Question  @relation(fields: [questionId], references: [id])
+  session         Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, questionId])
 }
 
-enum InterpretationMode {
-  template
-  llm
-}
-
 model Result {
-  id                  String   @id @default(cuid())
-  sessionId           String   @unique
+  id                  String             @id @default(cuid())
+  sessionId           String             @unique
   tenantId            String
   userId              String
   instrumentVersionId String
-
   cognitiveScore      Int
   cognitiveBand       String
   relationalScore     Int
   relationalBand      String
   innerScore          Int
   innerBand           String
-
   overallScore        Int
   overallBand         String
   lowestDimensionId   String
-
   interpretationMode  InterpretationMode
-  // Final rendered per-dimension narratives + overall narrative.
   interpretationJson  Json
-  generatedAt         DateTime @default(now())
-
-  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  session             Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  instrumentVersion   InstrumentVersion @relation(fields: [instrumentVersionId], references: [id])
+  generatedAt         DateTime           @default(now())
+  instrumentVersion   InstrumentVersion  @relation(fields: [instrumentVersionId], references: [id])
+  session             Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, generatedAt])
 }
 
-// =============================================================
-// Notifications, audit, events
-// =============================================================
+model Notification {
+  id        String              @id @default(cuid())
+  tenantId  String
+  coachId   String?
+  userId    String?
+  sessionId String?
+  type      NotificationType
+  channel   NotificationChannel
+  payload   Json
+  status    NotificationStatus  @default(pending)
+  attempts  Int                 @default(0)
+  lastError String?
+  createdAt DateTime            @default(now())
+  sentAt    DateTime?
+  coach     Coach?              @relation(fields: [coachId], references: [id])
+  session   Session?            @relation(fields: [sessionId], references: [id])
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?               @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([tenantId, createdAt])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  actorUserId String
+  entity      String
+  entityId    String
+  action      AuditAction
+  before      Json?
+  after       Json?
+  at          DateTime    @default(now())
+
+  @@index([entity, entityId])
+  @@index([at])
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  sessionId  String?
+  eventType  String
+  properties Json
+  at         DateTime @default(now())
+  session    Session? @relation(fields: [sessionId], references: [id])
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, eventType, at])
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  role         AdminRole
+  tenantId     String?
+  passwordHash String?
+  mfaEnabled   Boolean   @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+enum WhatsAppRoutingMode {
+  dedicated
+  shared
+}
+
+enum TenantStatus {
+  active
+  disabled
+}
+
+enum NotificationChannel {
+  email
+  whatsapp
+}
+
+enum OptionLabel {
+  A
+  B
+  C
+  D
+}
+
+enum VoiceMode {
+  off
+  on
+}
+
+enum SessionStatus {
+  in_progress
+  completed
+  abandoned
+  escalated
+}
+
+enum InputType {
+  text
+  voice
+}
+
+enum InterpretationMode {
+  template
+  llm
+}
 
 enum NotificationType {
   coaching_interest
@@ -420,30 +419,6 @@ enum NotificationStatus {
   failed
 }
 
-model Notification {
-  id          String             @id @default(cuid())
-  tenantId    String
-  coachId     String?
-  userId      String?
-  sessionId   String?
-  type        NotificationType
-  channel     NotificationChannel
-  payload     Json
-  status      NotificationStatus @default(pending)
-  attempts    Int                @default(0)
-  lastError   String?
-  createdAt   DateTime           @default(now())
-  sentAt      DateTime?
-
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  coach       Coach?   @relation(fields: [coachId], references: [id])
-  user        User?    @relation(fields: [userId], references: [id])
-  session     Session? @relation(fields: [sessionId], references: [id])
-
-  @@index([status])
-  @@index([tenantId, createdAt])
-}
-
 enum AuditAction {
   create
   update
@@ -451,55 +426,8 @@ enum AuditAction {
   publish
 }
 
-model AuditLog {
-  id           String      @id @default(cuid())
-  actorUserId  String
-  entity       String
-  entityId     String
-  action       AuditAction
-  before       Json?
-  after        Json?
-  at           DateTime    @default(now())
-
-  @@index([entity, entityId])
-  @@index([at])
-}
-
-model Event {
-  id         String   @id @default(cuid())
-  tenantId   String
-  userId     String?
-  sessionId  String?
-  eventType  String
-  properties Json
-  at         DateTime @default(now())
-
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user       User?    @relation(fields: [userId], references: [id])
-  session    Session? @relation(fields: [sessionId], references: [id])
-
-  @@index([tenantId, eventType, at])
-}
-
-// =============================================================
-// Admin users (RBAC) — separate from WhatsApp end users
-// =============================================================
-
 enum AdminRole {
   super_admin
   tenant_admin
   coach
-}
-
-model AdminUser {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  name         String?
-  role         AdminRole
-  // For tenant_admin / coach: the tenant they're scoped to. NULL for super_admin.
-  tenantId     String?
-  passwordHash String?   // null when using SSO
-  mfaEnabled   Boolean   @default(false)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
 }
