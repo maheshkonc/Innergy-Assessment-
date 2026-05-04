@@ -154,13 +154,16 @@ export async function finaliseResults(
 
   // Email the leader their report (idempotent per session). Failure here
   // must not block the WhatsApp/web result delivery — log and continue.
-  if (user.email) {
+  // Re-fetch the user to get the email that was saved during ask_email step
+  // (the `user` arg may be stale from before email was persisted).
+  const freshUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (freshUser?.email) {
     try {
       await enqueueUserReportNotification(prisma, {
         tenantId: tenant.id,
         userId: user.id,
         sessionId: session.id,
-        email: user.email,
+        email: freshUser.email,
       });
     } catch (err) {
       log.error({ err, sessionId: session.id }, "failed to enqueue user_report email");
