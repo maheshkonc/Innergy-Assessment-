@@ -4,6 +4,7 @@
 
 import { prisma } from "../src/db/client";
 import { enqueueUserReportNotification } from "../src/core/notifications/create";
+import { DIM_COGNITIVE, DIM_RELATIONAL, DIM_INNER } from "../src/db/seed/fixtures/innergy_fls_v1";
 
 async function main() {
   const email = process.argv[2];
@@ -16,10 +17,9 @@ async function main() {
     where: { tenantId: tenant.id },
     include: { instrumentVersion: true },
   });
-  const dims = await prisma.dimension.findMany({ orderBy: { name: "asc" } });
-  const cogId = dims[0].id;
-  const relId = dims[1].id;
-  const innerId = dims[2].id;
+  const cogId = DIM_COGNITIVE;
+  const relId = DIM_RELATIONAL;
+  const innerId = DIM_INNER;
 
   const user = await prisma.user.create({
     data: {
