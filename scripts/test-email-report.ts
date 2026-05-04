@@ -16,7 +16,7 @@ async function main() {
     where: { tenantId: tenant.id },
     include: { instrumentVersion: true },
   });
-  const dims = await prisma.dimension.findMany({ orderBy: { displayOrder: "asc" } });
+  const dims = await prisma.dimension.findMany({ orderBy: { name: "asc" } });
   const cogId = dims[0].id;
   const relId = dims[1].id;
   const innerId = dims[2].id;
