@@ -44,6 +44,7 @@ describe("notifications worker renderBody", () => {
       interpretation: null,
       lowestDimensionName: null,
       coach: null,
+      tenant: null,
     });
     expect(body).toContain("Safety escalation");
     expect(body).toContain("Asha");
@@ -73,6 +74,7 @@ describe("notifications worker renderBody", () => {
       interpretation: null,
       lowestDimensionName: null,
       coach: null,
+      tenant: null,
     });
     expect(body).toContain("Ravi");
     expect(body).toContain("Innergy");
@@ -94,6 +96,7 @@ describe("notifications worker renderBody", () => {
       interpretation: null,
       lowestDimensionName: null,
       coach: null,
+      tenant: null,
     });
     expect(body).toContain("Ravi");
     expect(body).toContain("coaching conversation");

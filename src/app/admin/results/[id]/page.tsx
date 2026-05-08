@@ -34,10 +34,16 @@ export default async function SessionDetail({
 
     return (
         <div className="max-w-5xl">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between gap-4">
                 <Link href="/admin/results" className="text-sm font-medium text-slate-500 hover:text-slate-900">
                     ← Back to Results
                 </Link>
+                <a
+                    href={`/api/admin/sessions/${id}/answers/export`}
+                    className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                >
+                    Export Answers (CSV)
+                </a>
             </div>
 
             <header className="mt-4 flex flex-col justify-between gap-4 md:flex-row md:items-end">

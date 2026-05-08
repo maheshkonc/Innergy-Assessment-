@@ -1,53 +1,42 @@
 import { prisma } from "@/db/client";
 import { DbStatusBanner } from "../DbStatusBanner";
+import { AnalyticsDashboard } from "./AnalyticsDashboard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  const result = await Promise.all([
-    prisma.session.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.result.groupBy({ by: ["overallBand"], _count: { _all: true } }),
-  ])
-    .then(([byStatus, bandCounts]) => ({ ok: true as const, byStatus, bandCounts }))
+  const result = await prisma.user
+    .findMany({
+      where: { sessions: { some: {} } },
+      select: {
+        id: true,
+        firstName: true,
+        email: true,
+        organisation: true,
+        _count: { select: { sessions: true } },
+      },
+      orderBy: { lastSeenAt: "desc" },
+      take: 500,
+    })
+    .then((users) => ({ ok: true as const, users }))
     .catch((err: unknown) => ({ ok: false as const, err }));
 
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold">Analytics</h1>
-      {!result.ok ? (
+  if (!result.ok) {
+    return (
+      <div>
+        <h1 className="text-2xl font-semibold">Analytics</h1>
         <DbStatusBanner />
-      ) : (
-        <>
-          <section className="mt-6">
-            <h2 className="font-medium">Sessions by status</h2>
-            {result.byStatus.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">No sessions yet.</p>
-            ) : (
-              <ul className="mt-2 text-sm">
-                {result.byStatus.map((g) => (
-                  <li key={g.status}>
-                    {g.status}: {g._count._all}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <section className="mt-6">
-            <h2 className="font-medium">Overall band distribution</h2>
-            {result.bandCounts.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">No results yet.</p>
-            ) : (
-              <ul className="mt-2 text-sm">
-                {result.bandCounts.map((b) => (
-                  <li key={b.overallBand}>
-                    {b.overallBand}: {b._count._all}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  const candidates = result.users.map((u) => ({
+    userId: u.id,
+    firstName: u.firstName,
+    email: u.email,
+    organisation: u.organisation,
+    sessionCount: u._count.sessions,
+  }));
+
+  return <AnalyticsDashboard candidates={candidates} />;
 }

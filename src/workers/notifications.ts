@@ -42,6 +42,7 @@ interface EnrichedPayload {
   interpretation: InterpretationJson | null;
   lowestDimensionName: string | null;
   coach: { name: string; bookingUrl: string | null } | null;
+  tenant: { name: string; logoUrl: string | null } | null;
 }
 
 async function tick() {
@@ -90,12 +91,16 @@ async function tick() {
 
 async function enrich(n: Notification): Promise<EnrichedPayload | null> {
   if (!n.userId || !n.sessionId) return null;
-  const [user, result, coachJoin] = await Promise.all([
+  const [user, result, coachJoin, tenant] = await Promise.all([
     prisma.user.findUnique({ where: { id: n.userId } }),
     prisma.result.findUnique({ where: { sessionId: n.sessionId } }),
     prisma.tenantCoach.findFirst({
       where: { tenantId: n.tenantId, isPrimary: true },
       include: { coach: true },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: n.tenantId },
+      select: { name: true, logoUrl: true },
     }),
   ]);
 
@@ -120,6 +125,7 @@ async function enrich(n: Notification): Promise<EnrichedPayload | null> {
     interpretation,
     lowestDimensionName,
     coach: coachJoin ? { name: coachJoin.coach.name, bookingUrl: coachJoin.coach.bookingUrl } : null,
+    tenant: tenant ? { name: tenant.name, logoUrl: tenant.logoUrl } : null,
   };
 }
 
@@ -250,62 +256,127 @@ function renderUserReportEmail(
   const bookingUrl = enriched?.coach?.bookingUrl ?? "";
   const lowest = enriched?.lowestDimensionName ?? "";
 
-  const subject = overall
-    ? `Your AI Leadership Readiness Report — ${overall.band}`
-    : "Your AI Leadership Readiness Report";
+  const tenantName = enriched?.tenant?.name ?? "Innergy";
+  const baseUrl = (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const tenantLogoUrl = enriched?.tenant?.logoUrl
+    ? enriched.tenant.logoUrl
+    : `${baseUrl}/logo.png`;
 
-  const purple = "#8B5CF6";
-  const lavender = "#E9D5FF";
-  const ink = "#1a1a1a";
-  const muted = "#6b7280";
-  const cream = "#FBF6EC";
+  const subject = overall
+    ? `Your ${tenantName} Leadership Readiness Report — ${overall.band}`
+    : `Your ${tenantName} Leadership Readiness Report`;
+
+  // Innergy brand palette — mirrors src/app/globals.css :root vars so the
+  // email matches what users see on /take. Composition rules also mirror the
+  // assessment page: dark-brown pill with yellow uppercase text as the
+  // signature eyebrow, pink reserved for a single italic accent in the
+  // headline, yellow used as a left-stripe on dimension blocks (echoing the
+  // typing-indicator), and brown CTA buttons with cream text.
+  const ink = "#36211B";            // --foreground
+  const cream = "#FFFAEF";          // --background
+  const containerLight = "#F5ECDF"; // --container-light
+  const accentPink = "#FF3F64";     // --accent-pink
+  const accentYellow = "#FFDE59";   // --accent-yellow
+  const muted = "#8A7868";
+  const serifFont = "'Fraunces','Playfair Display',Georgia,serif";
+  const sansFont = "'Montserrat',system-ui,-apple-system,Segoe UI,sans-serif";
 
   const dimBlocks = dims
     .map((d) => {
       if (!d.score) return "";
       const narrative = perDim.find((p) => p.dimensionName === d.narrativeFor)?.narrative ?? "";
       return `
-        <tr><td style="padding:20px 24px;border-top:1px solid ${lavender}">
-          <div style="font-size:13px;color:${muted};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">${escapeHtml(d.label)}</div>
-          <div style="font-size:22px;font-weight:600;color:${ink};margin-bottom:4px">${d.score.score} <span style="color:${purple}">· ${escapeHtml(d.score.band)}</span></div>
-          ${narrative ? `<div style="font-size:15px;color:${ink};margin-top:10px">${escapeHtml(narrative)}</div>` : ""}
+        <tr><td style="padding:0 24px 16px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid ${containerLight};border-left:4px solid ${accentYellow};border-radius:14px">
+            <tr><td style="padding:18px 20px">
+              <div class="innergy-eyebrow" style="font-size:10px;color:${muted}">${escapeHtml(d.label)}</div>
+              <div class="innergy-num" style="margin-top:4px;font-size:32px;color:${ink};line-height:1.1;letter-spacing:-0.015em">${d.score.score}</div>
+              <div class="innergy-eyebrow" style="margin-top:4px;font-size:10px;color:${ink}">${escapeHtml(d.score.band)}</div>
+              ${narrative ? `<div class="innergy-body" style="margin-top:12px;font-size:14px;color:${ink}">${escapeHtml(narrative)}</div>` : ""}
+            </td></tr>
+          </table>
         </td></tr>`;
     })
     .join("");
 
   const ctaBlock = bookingUrl
-    ? `<tr><td style="padding:24px;text-align:center;background:${cream}">
-         <div style="font-size:15px;color:${ink};margin-bottom:14px">Want to go deeper${lowest ? ` on ${escapeHtml(lowest)}` : ""}? Book a free debrief with ${escapeHtml(coachName)}.</div>
-         <a href="${escapeAttr(bookingUrl)}" style="display:inline-block;background:${purple};color:#fff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:6px;font-size:15px">Book a debrief</a>
+    ? `<tr><td style="padding:8px 24px 28px">
+         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${containerLight};border-radius:14px">
+           <tr><td style="padding:24px;text-align:center">
+             <div class="innergy-eyebrow" style="font-size:10px;color:${ink}">Next step</div>
+             <div class="innergy-h1" style="margin-top:10px;font-size:22px;color:${ink};line-height:1.3">Want to go deeper${lowest ? ` on <em style="color:${accentPink};font-style:italic;font-weight:600">${escapeHtml(lowest)}</em>` : ""}?</div>
+             <div class="innergy-body" style="margin-top:6px;font-size:14px;color:${muted}">Book a free debrief with ${escapeHtml(coachName)}.</div>
+             <a href="${escapeAttr(bookingUrl)}" class="innergy-eyebrow" style="display:inline-block;margin-top:18px;background:${ink};color:${cream};text-decoration:none;padding:13px 28px;border-radius:999px;font-size:11px">Book a debrief</a>
+           </td></tr>
+         </table>
        </td></tr>`
     : "";
 
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:${cream};font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:${ink}">
+  // Google Fonts via @import works in Gmail web, Apple Mail, iOS Mail, and
+  // most modern webmail. Outlook desktop strips it and falls back to the
+  // serif/sans-serif stack — that's acceptable degradation.
+  const fontsImport = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Montserrat:wght@300;400;500;600&display=swap');`;
+
+  const html = `<!doctype html><html lang="en"><head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <title>${escapeHtml(subject)}</title>
+    <style>
+      ${fontsImport}
+      body { margin: 0; padding: 0; background: ${cream}; color: ${ink}; font-family: ${sansFont}; -webkit-font-smoothing: antialiased; }
+      a { color: inherit; }
+      .innergy-h1 { font-family: ${serifFont}; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+      .innergy-num { font-family: ${serifFont}; font-weight: 600; }
+      .innergy-eyebrow { font-family: ${sansFont}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em; }
+      .innergy-body { font-family: ${sansFont}; line-height: 1.625; }
+      .innergy-muted { color: ${ink}; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${cream};padding:32px 16px">
       <tr><td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-          <tr><td style="padding:32px 24px 8px">
-            <div style="font-size:13px;color:${purple};text-transform:uppercase;letter-spacing:0.12em;font-weight:600">Innergy</div>
-            <h1 style="margin:8px 0 0;font-size:26px;font-weight:600;color:${ink}">Your AI Leadership Readiness Report</h1>
-            <p style="margin:12px 0 0;font-size:15px;color:${muted}">Hi ${escapeHtml(name)} — here's your detailed readout across the three dimensions.</p>
+        <!-- header strip with logo, sits on cream like the take/page header -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+          <tr><td style="padding:0 4px 16px;text-align:left">
+            <img src="${escapeAttr(tenantLogoUrl)}" alt="${escapeAttr(tenantName)}" width="110" style="display:block;max-width:110px;height:auto" />
           </td></tr>
+        </table>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid ${containerLight};box-shadow:0 2px 6px rgba(54,33,27,0.06)">
+          <tr><td style="padding:32px 24px 16px;text-align:left">
+            <!-- signature eyebrow: dark-brown pill + yellow uppercase, mirrors /take -->
+            <div class="innergy-eyebrow" style="display:inline-block;background:${ink};color:${accentYellow};font-size:10px;padding:6px 14px;border-radius:999px">Leadership Diagnostic</div>
+            <h1 class="innergy-h1" style="margin:18px 0 0;font-size:34px;color:${ink}">Your <em style="color:${accentPink};font-style:italic;font-weight:600">AI Leadership</em> readiness report</h1>
+            <p class="innergy-body innergy-muted" style="margin:14px 0 0;font-size:14px">Hi ${escapeHtml(name)} — here's your detailed readout across the three dimensions.</p>
+          </td></tr>
+
           ${overall ? `
-          <tr><td style="padding:24px">
-            <div style="background:${lavender};border-radius:8px;padding:20px;text-align:center">
-              <div style="font-size:13px;color:${ink};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Overall</div>
-              <div style="font-size:32px;font-weight:700;color:${ink};line-height:1.1">${overall.score}</div>
-              <div style="font-size:18px;color:${purple};font-weight:600;margin-top:4px">${escapeHtml(overall.band)}</div>
-              ${overallNarrative ? `<div style="font-size:14px;color:${ink};margin-top:14px;line-height:1.55;text-align:left">${escapeHtml(overallNarrative)}</div>` : ""}
-            </div>
+          <tr><td style="padding:8px 24px 16px">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${cream};border:1px solid ${containerLight};border-radius:18px">
+              <tr><td style="padding:24px;text-align:center">
+                <div class="innergy-eyebrow" style="font-size:10px;color:${ink};letter-spacing:0.18em">Overall score</div>
+                <div class="innergy-num" style="margin-top:10px;font-size:60px;color:${ink};line-height:1;letter-spacing:-0.02em">${overall.score}</div>
+                <div class="innergy-eyebrow" style="margin-top:8px;display:inline-block;background:${ink};color:${accentYellow};font-size:10px;padding:5px 12px;border-radius:999px">${escapeHtml(overall.band)}</div>
+                ${overallNarrative ? `<div class="innergy-body" style="margin-top:18px;font-size:14px;color:${ink};text-align:left">${escapeHtml(overallNarrative)}</div>` : ""}
+              </td></tr>
+            </table>
           </td></tr>` : ""}
+
+          <tr><td style="padding:0 24px 8px">
+            <div class="innergy-eyebrow" style="font-size:10px;color:${muted};margin-bottom:10px">By dimension</div>
+          </td></tr>
           ${dimBlocks}
           ${ctaBlock}
-          <tr><td style="padding:20px 24px;border-top:1px solid ${lavender};font-size:12px;color:${muted};text-align:center">
-            This report is generated from your assessment responses. Your answers are private to you and your coach.
+
+          <tr><td style="padding:20px 24px;border-top:1px solid ${containerLight};text-align:center" class="innergy-body">
+            <div class="innergy-eyebrow" style="font-size:10px;color:${ink}">${escapeHtml(tenantName)} · Leadership diagnostic</div>
+            <div style="margin-top:6px;font-size:12px;color:${muted}">This report is generated from your assessment responses. Your answers are private to you and your coach.</div>
           </td></tr>
         </table>
       </td></tr>
-    </table></body></html>`;
+    </table>
+  </body></html>`;
 
   const textLines = [
     `Hi ${name},`,
