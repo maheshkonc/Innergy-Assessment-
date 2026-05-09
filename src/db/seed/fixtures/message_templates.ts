@@ -18,8 +18,9 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   {
     key: "welcome_2",
     body:
-      "This takes about {{duration_estimate}}. {{question_count}} questions. Answer honestly — nobody else sees your answers.\n\n" +
-      "At the end you'll get a personal readout and an optional coaching conversation with {{coach_name}}.",
+      "A candid read on your team's area of competence for leading the future.\n\n" +
+      "3 Dimensions | 25 questions | 10 minutes. You will get the report at the end and also in your email.\n\n" +
+      "Instruction: Reflect on how your current team operates. This ideally is the team you are a part of or the team which reports into you.",
   },
   {
     key: "welcome_3",
