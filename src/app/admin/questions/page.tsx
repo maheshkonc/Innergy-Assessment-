@@ -1,6 +1,9 @@
 import { prisma } from "@/db/client";
 import { DbStatusBanner } from "../DbStatusBanner";
 import { EditableField } from "./QuestionEditor";
+import { ReorderButtons } from "./ReorderButtons";
+import { FlowSettings } from "./FlowSettings";
+import { DEFAULT_CONTACT_POSITION } from "@/core/state-machine/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -18,19 +21,26 @@ export default async function QuestionsPage() {
     );
   }
 
-  const { sections, inProgressCount } = result;
+  const { sections, inProgressCount, tenant, contactPosition } = result;
   const locked = false; // Restriction removed per user request
 
   return (
     <div>
       <h1 className="text-2xl font-semibold">Questions</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Edit question text and option labels. Scores are edited under{" "}
+        Edit question text and option labels, and reorder sections and questions
+        with the ↑ ↓ controls. Scores are edited under{" "}
         <a href="/admin/scoring" className="underline">
           Scoring
         </a>
         . Past results are unaffected — Answer rows reference questions by id.
       </p>
+
+      {tenant && (
+        <div className="mt-6">
+          <FlowSettings tenantId={tenant.id} initialValue={contactPosition} />
+        </div>
+      )}
 
       {inProgressCount > 0 && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -44,19 +54,35 @@ export default async function QuestionsPage() {
       )}
 
       <div className="mt-6 space-y-8">
-        {sections.map((s) => (
+        {sections.map((s, si) => (
           <section key={s.id} className="rounded-lg border border-slate-200 bg-white">
-            <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-slate-900">{s.dimensionName}</h2>
-              <div className="text-xs text-slate-500">
-                Section {s.displayOrder} · {s.questions.length} questions
+            <header className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">{s.dimensionName}</h2>
+                <div className="text-xs text-slate-500">
+                  Section {si + 1} · {s.questions.length} questions
+                </div>
               </div>
+              <ReorderButtons
+                kind="section"
+                id={s.id}
+                canMoveUp={si > 0}
+                canMoveDown={si < sections.length - 1}
+              />
             </header>
             <div className="divide-y divide-slate-100">
-              {s.questions.map((q) => (
+              {s.questions.map((q, qi) => (
                 <div key={q.id} className="space-y-3 px-4 py-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Q{q.displayOrder}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Q{qi + 1}
+                    </div>
+                    <ReorderButtons
+                      kind="question"
+                      id={q.id}
+                      canMoveUp={qi > 0}
+                      canMoveDown={qi < s.questions.length - 1}
+                    />
                   </div>
                   <EditableField
                     initialValue={q.stem}
@@ -110,8 +136,21 @@ async function loadData() {
     },
   });
 
+  const tenant = await prisma.tenant.findFirst({
+    where: { status: "active" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  let contactPosition: string = DEFAULT_CONTACT_POSITION;
+  if (tenant) {
+    const flag = await prisma.featureFlag.findUnique({
+      where: { tenantId_key: { tenantId: tenant.id, key: "contact_capture_position" } },
+    });
+    if (flag?.value) contactPosition = flag.value;
+  }
+
   if (!current?.currentVersion) {
-    return { sections: [], inProgressCount: 0 };
+    return { sections: [], inProgressCount: 0, tenant, contactPosition };
   }
 
   const inProgressCount = await prisma.session.count({
@@ -138,5 +177,5 @@ async function loadData() {
     })),
   }));
 
-  return { sections, inProgressCount };
+  return { sections, inProgressCount, tenant, contactPosition };
 }

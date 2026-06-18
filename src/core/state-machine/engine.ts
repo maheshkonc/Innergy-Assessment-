@@ -10,7 +10,34 @@ import type { PrismaClient, Session, Tenant, User } from "@prisma/client";
 import { renderTemplate, TemplateError } from "../templates/render";
 import { resolveMessageTemplate } from "../templates/resolve";
 import { normaliseOptionReply } from "../scoring/normalise";
+import { enqueueUserReportNotification } from "../notifications/create";
+import { log } from "../logger";
 import type { FsmContext, FsmState } from "./types";
+
+// Where the name/company/email step sits in the flow. Configured per tenant
+// via the `contact_capture_position` feature flag and editable from the admin
+// Questions page. Default mirrors the launch flow: details after the
+// questions, just before results.
+export type ContactPosition =
+  | "before_questions"
+  | "after_questions"
+  | "after_results";
+
+export const DEFAULT_CONTACT_POSITION: ContactPosition = "after_questions";
+
+export async function getContactPosition(
+  prisma: PrismaClient,
+  tenantId: string,
+): Promise<ContactPosition> {
+  const flag = await prisma.featureFlag.findUnique({
+    where: { tenantId_key: { tenantId, key: "contact_capture_position" } },
+  });
+  const v = flag?.value;
+  if (v === "before_questions" || v === "after_questions" || v === "after_results") {
+    return v;
+  }
+  return DEFAULT_CONTACT_POSITION;
+}
 
 export type OutboundAction =
   | { kind: "text"; body: string }
@@ -90,9 +117,33 @@ async function handleWelcome(
   }
   // Anything else — "yes", "hi", "hello", "ready", "start", etc. — the user
   // already opted in by sending a message after the QR scan, so advance.
-  const body = await render(prisma, "ask_name", input.tenant, {});
-  actions.push({ kind: "text", body });
-  return { actions, newContext: { state: "ask_name" } };
+  const position = await getContactPosition(prisma, input.tenant.id);
+  if (position === "before_questions") {
+    const body = await render(prisma, "ask_name", input.tenant, {});
+    actions.push({ kind: "text", body });
+    return { actions, newContext: { state: "ask_name" } };
+  }
+  // Otherwise details are captured later — go straight into the diagnostic.
+  return startDiagnostic(prisma, input, actions);
+}
+
+// Sends the first section intro + first question, advancing to the question
+// state. Shared by the welcome handler (start of flow).
+async function startDiagnostic(
+  prisma: PrismaClient,
+  input: HandleInboundInput,
+  actions: OutboundAction[],
+): Promise<HandleInboundResult> {
+  const firstSection = await prisma.section.findFirst({
+    where: { instrumentVersionId: input.session.instrumentVersionId, displayOrder: 1 },
+  });
+  if (firstSection) {
+    const intro = await render(prisma, firstSection.introTemplateKey, input.tenant, {});
+    actions.push({ kind: "text", body: intro });
+    actions.push({ kind: "voice_if_enabled", body: intro });
+  }
+  await enqueueQuestion(prisma, input, 1, actions);
+  return { actions, newContext: { state: "question", currentQuestionIndex: 1 } };
 }
 
 async function handleAskName(
@@ -159,23 +210,50 @@ async function handleAskEmail(
     data: { email } as any
   });
   const name = input.user.firstName ?? "there";
+  const position = await getContactPosition(prisma, input.tenant.id);
 
-  // PDF step 3 close-out: "Perfect. Let's begin, [Name]."
-  const ack = await render(prisma, "org_ack", input.tenant, { name }, { allowMissing: true });
-  actions.push({ kind: "text", body: ack });
-
-  // Kick off the diagnostic: send section-1 intro, then the first question.
-  const firstSection = await prisma.section.findFirst({
-    where: { instrumentVersionId: input.session.instrumentVersionId, displayOrder: 1 },
-  });
-  if (firstSection) {
-    const intro = await render(prisma, firstSection.introTemplateKey, input.tenant, {});
-    actions.push({ kind: "text", body: intro });
-    actions.push({ kind: "voice_if_enabled", body: intro });
+  // Details captured at the start of the flow: now kick off the diagnostic.
+  if (position === "before_questions") {
+    return startDiagnostic(prisma, input, actions);
   }
 
-  await enqueueQuestion(prisma, input, 1, actions);
-  return { actions, newContext: { state: "question", currentQuestionIndex: 1 } };
+  // Details captured after the results: this is the final step — send the
+  // closing message, enqueue the report email (the Result already exists), and
+  // complete the session.
+  if (position === "after_results") {
+    const closing = await render(
+      prisma,
+      "closing",
+      input.tenant,
+      { name },
+      { allowMissing: true },
+    );
+    actions.push({ kind: "text", body: closing });
+    try {
+      await enqueueUserReportNotification(prisma, {
+        tenantId: input.tenant.id,
+        userId: input.user.id,
+        sessionId: input.session.id,
+        email,
+      });
+    } catch (err) {
+      log.error({ err, sessionId: input.session.id }, "failed to enqueue user_report email");
+    }
+    return { actions, newContext: { state: "closed" }, terminalStatus: "completed" };
+  }
+
+  // Default (after_questions): compute and show the results next (the report
+  // email is enqueued in finaliseResults, once the Result row exists).
+  const calcBody = await render(
+    prisma,
+    "calculating",
+    input.tenant,
+    { name },
+    { allowMissing: true },
+  );
+  actions.push({ kind: "text", body: calcBody });
+  actions.push({ kind: "delay_ms", ms: 2500 });
+  return { actions, newContext: { state: "computing" } };
 }
 
 async function handleQuestion(
@@ -240,7 +318,16 @@ async function handleQuestion(
     return { actions, newContext: { ...ctx, state: "question", currentQuestionIndex: nextIdx } };
   }
 
-  // Last question answered — move to computing.
+  // Last question answered. If details are captured here (after questions,
+  // before results — the default), ask for the name now; the readout becomes
+  // the incentive to finish the short form. Otherwise go straight to results.
+  const position = await getContactPosition(prisma, input.tenant.id);
+  if (position === "after_questions") {
+    const askName = await render(prisma, "ask_name", input.tenant, {});
+    actions.push({ kind: "text", body: askName });
+    return { actions, newContext: { state: "ask_name" } };
+  }
+
   const calcBody = await render(
     prisma,
     "calculating",
@@ -268,7 +355,16 @@ async function handleDebriefCta(
   const body = await render(prisma, bodyKey, input.tenant, {});
   actions.push({ kind: "text", body });
 
-  // PDF §15: Transition directly to closing message and terminal state.
+  // If details are captured after the results, collect them now (name → org →
+  // email); the closing message + report email fire from handleAskEmail.
+  const position = await getContactPosition(prisma, input.tenant.id);
+  if (position === "after_results") {
+    const askName = await render(prisma, "ask_name", input.tenant, {});
+    actions.push({ kind: "text", body: askName });
+    return { actions, newContext: { state: "ask_name" } };
+  }
+
+  // Transition to closing message and terminal state.
   const closing = await render(
     prisma,
     "closing",

@@ -14,6 +14,7 @@ import { resolveMessageTemplate } from "../templates/resolve";
 import { renderTemplate } from "../templates/render";
 import type { LLMProvider } from "../../providers/llm/types";
 import type { OutboundAction } from "./engine";
+import { getContactPosition } from "./engine";
 import { enqueueUserReportNotification } from "../notifications/create";
 import { log } from "../logger";
 
@@ -154,19 +155,24 @@ export async function finaliseResults(
 
   // Email the leader their report (idempotent per session). Failure here
   // must not block the WhatsApp/web result delivery — log and continue.
-  // Re-fetch the user to get the email that was saved during ask_email step
-  // (the `user` arg may be stale from before email was persisted).
-  const freshUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (freshUser?.email) {
-    try {
-      await enqueueUserReportNotification(prisma, {
-        tenantId: tenant.id,
-        userId: user.id,
-        sessionId: session.id,
-        email: freshUser.email,
-      });
-    } catch (err) {
-      log.error({ err, sessionId: session.id }, "failed to enqueue user_report email");
+  // When the contact step runs AFTER the results, the email isn't known yet
+  // (and any email on the user row would be stale from a prior run), so the
+  // enqueue is deferred to handleAskEmail. Otherwise the email is already
+  // captured — re-fetch the user to read it (the `user` arg may be stale).
+  const position = await getContactPosition(prisma, tenant.id);
+  if (position !== "after_results") {
+    const freshUser = await prisma.user.findUnique({ where: { id: user.id } });
+    if (freshUser?.email) {
+      try {
+        await enqueueUserReportNotification(prisma, {
+          tenantId: tenant.id,
+          userId: user.id,
+          sessionId: session.id,
+          email: freshUser.email,
+        });
+      } catch (err) {
+        log.error({ err, sessionId: session.id }, "failed to enqueue user_report email");
+      }
     }
   }
 
