@@ -244,6 +244,9 @@ async function seedInnergyTenant() {
     ["llm_interpretation", "false"],
     ["email_capture", "false"],
     ["dynamic_image_gen", "false"],
+    // Where the name/company/email step sits: before_questions |
+    // after_questions | after_results. Editable from the admin Questions page.
+    ["contact_capture_position", "after_questions"],
   ];
   for (const [key, value] of flags) {
     await prisma.featureFlag.upsert({
