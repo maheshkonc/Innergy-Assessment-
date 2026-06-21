@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import dynamic from "next/dynamic";
-
-const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 type WebAction = { kind: "text"; body: string } | { kind: "image"; imageUrl: string };
 
@@ -390,34 +387,26 @@ function BubbleView({
     );
   }
   if (bubble.kind === "result_chart") {
-    return (
-      <div className="flex items-end gap-2">
-        <Avatar who="bot" />
-        <div className="flex max-w-[85%] flex-col items-start gap-1">
-          <div className="w-full min-w-[300px] overflow-hidden rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm">
-            <AssessmentDonutChart dimensions={bubble.dimensions} />
-          </div>
-          <span className="text-[10px] text-[#8A7868]">{time}</span>
-        </div>
-      </div>
-    );
+    // The full report (chart + total + rows) renders once in ResultsWidget
+    // below, so we suppress the in-conversation chart bubble to avoid showing
+    // the radar twice back-to-back.
+    return null;
   }
 
   if (bubble.kind === "image") {
-    // If it's a result image, hide it on web because we render the real ApexChart 
-    // inside the subsequent overall result card for a cleaner interactive experience.
-    if (bubble.imageUrl.includes("/api/image/result/")) {
-      return null;
-    }
+    // Result images (the radar report card) are the same PNG that gets emailed.
+    // Show it inline with the results so the diagram appears alongside the
+    // readout — give it a wider bubble so the chart is legible.
+    const isResult = bubble.imageUrl.includes("/api/image/result/");
     return (
       <div className="flex items-end gap-2">
         <Avatar who="bot" />
-        <div className="flex max-w-[85%] flex-col items-start gap-1">
+        <div className={`flex flex-col items-start gap-1 ${isResult ? "w-full max-w-sm" : "max-w-[85%]"}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={bubble.imageUrl}
-            alt="Attachment"
-            className="rounded-2xl border border-[var(--container-light)] bg-white shadow-sm"
+            alt={isResult ? "Your Leadership Readiness report" : "Attachment"}
+            className="w-full rounded-2xl border border-[var(--container-light)] bg-white shadow-sm"
           />
           <span className="text-[10px] text-[#8A7868]">{time}</span>
         </div>
@@ -598,7 +587,7 @@ function OverallResultCard({
         {/* Real Interactive ApexChart in the Bubble! */}
         {dimensions && dimensions.length > 0 && (
           <div className="mt-4 -mb-4 bg-white/50 rounded-xl py-2">
-            <AssessmentDonutChart dimensions={dimensions} />
+            <AssessmentRadarChart dimensions={dimensions} />
           </div>
         )}
 
@@ -946,99 +935,43 @@ function YesNoWidget({
 }
 
 
-function AssessmentDonutChart({
+// Per-section brand colours (display order): Section 1 ink, Section 2 pink,
+// Section 3 yellow. Shared by the radar markers and the legend rows.
+const SECTION_COLORS = ["#36211B", "#FF3F64", "#FFDE59"];
+
+function AssessmentRadarChart({
   dimensions,
 }: {
   dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
 }) {
-  const series = dimensions.map((d) => d.score);
-  const labels = dimensions.map((d) => d.name);
+  // Hand-drawn SVG radar. Each axis is plotted as a fraction of its own max so
+  // the three spokes are comparable (maxima differ: 38 / 45 / 40), but the
+  // marker shows the RAW score. ApexCharts can't colour vertices per-section
+  // or put the score inside the marker, hence the custom SVG.
+  const W = 320;
+  const H = 250;
+  const cx = W / 2;
+  const cy = 140;
+  const R = 82;
+  const n = dimensions.length;
+  const rings = [0.25, 0.5, 0.75, 1];
 
-  // Map to brand colors
-  // Section 1: Dark Brown, Section 2: Pink, Section 3: Yellow
-  const colors = ["#36211B", "#FF3F64", "#FFDE59"];
-
-  const options: any = {
-    chart: {
-      type: "donut",
-      fontFamily: "Montserrat, sans-serif",
-      toolbar: { show: false },
-    },
-    colors: colors,
-    labels: labels,
-    stroke: {
-      show: true,
-      colors: ["var(--background)"],
-      width: 4,
-    },
-    dataLabels: {
-      enabled: true,
-      style: {
-        fontSize: "12px",
-        fontFamily: "Montserrat, sans-serif",
-        fontWeight: "700",
-      },
-      dropShadow: { enabled: false },
-    },
-    plotOptions: {
-      pie: {
-        expandOnClick: false,
-        donut: {
-          size: "70%",
-          background: "transparent",
-          labels: {
-            show: true,
-            name: {
-              show: true,
-              fontSize: "10px",
-              fontWeight: 600,
-              color: "#8A7868",
-              offsetY: -8,
-            },
-            value: {
-              show: true,
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "#36211B",
-              offsetY: 8,
-              formatter: () => "REPORT",
-            },
-            total: {
-              show: true,
-              showAlways: true,
-              label: "INNERGY",
-              color: "#36211B",
-              fontSize: "9px",
-              fontWeight: 600,
-              formatter: () => "REPORT",
-            },
-          },
-        },
-      },
-    },
-    legend: {
-      position: "bottom",
-      fontSize: "11px",
-      fontWeight: 500,
-      fontFamily: "Montserrat, sans-serif",
-      markers: { radius: 12 },
-      itemMargin: { horizontal: 8, vertical: 4 },
-    },
-    tooltip: {
-      y: {
-        formatter: (val: number, { seriesIndex }: any) => {
-          const dim = dimensions[seriesIndex];
-          if (!dim) return `${val}`;
-          return `${val} / ${dim.maxScore}`;
-        },
-      },
-    },
+  const angleOf = (i: number) => (-90 + (i * 360) / n) * (Math.PI / 180);
+  const pointAt = (i: number, frac: number): [number, number] => {
+    const a = angleOf(i);
+    return [cx + R * frac * Math.cos(a), cy + R * frac * Math.sin(a)];
   };
+  const polyPoints = (frac: number | number[]) =>
+    dimensions
+      .map((_, i) => pointAt(i, Array.isArray(frac) ? frac[i]! : frac).map((v) => v.toFixed(1)).join(","))
+      .join(" ");
+
+  const fracs = dimensions.map((d) => (d.maxScore > 0 ? Math.min(1, d.score / d.maxScore) : 0));
 
   return (
     <div className="mx-auto w-full max-w-sm py-2">
-      <div className="mb-4 flex flex-col items-center">
-        <div className="relative mb-4 flex h-[40px] w-full items-center justify-center overflow-hidden">
+      <div className="mb-1 flex flex-col items-center">
+        <div className="relative mb-2 flex h-[40px] w-full items-center justify-center overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.png?v=19"
@@ -1049,54 +982,122 @@ function AssessmentDonutChart({
         <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--foreground)] opacity-70">
           Full Spectrum Leadership
         </p>
+        <p className="mt-2 font-serif text-xl font-bold text-[var(--foreground)]">
+          Leadership Readiness
+        </p>
       </div>
-      <div className="min-h-[280px]">
-        <ReactApexChart options={options} series={series} type="donut" width="100%" />
-      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
+        {/* guide rings */}
+        {rings.map((lvl, idx) => (
+          <polygon
+            key={lvl}
+            points={polyPoints(lvl)}
+            fill="none"
+            stroke={idx === rings.length - 1 ? "#D9C3A0" : "#E7D8B5"}
+            strokeWidth={idx === rings.length - 1 ? 1.5 : 1}
+            strokeDasharray={idx === rings.length - 1 ? undefined : "3 4"}
+          />
+        ))}
+        {/* spokes */}
+        {dimensions.map((_, i) => {
+          const [x, y] = pointAt(i, 1);
+          return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#E7D8B5" strokeWidth={1} />;
+        })}
+        {/* data polygon */}
+        <polygon points={polyPoints(fracs)} fill="#FF3F64" fillOpacity={0.14} stroke="#FF3F64" strokeWidth={2} />
+        {/* axis labels — one word per line, anchored outward so they clear the markers */}
+        {dimensions.map((d, i) => {
+          const [lx, ly] = pointAt(i, 1.34);
+          const a = angleOf(i);
+          const anchor = Math.abs(Math.cos(a)) < 0.3 ? "middle" : Math.cos(a) > 0 ? "start" : "end";
+          const words = d.name.split(" ");
+          const lh = 14;
+          const startDy = -((words.length - 1) / 2) * lh;
+          return (
+            <text
+              key={d.name}
+              x={lx}
+              y={ly}
+              textAnchor={anchor}
+              dominantBaseline="middle"
+              fontSize="12"
+              fontWeight="600"
+              fontFamily="Montserrat, sans-serif"
+              fill="#36211B"
+            >
+              {words.map((w, wi) => (
+                <tspan key={wi} x={lx} dy={wi === 0 ? startDy : lh}>
+                  {w}
+                </tspan>
+              ))}
+            </text>
+          );
+        })}
+        {/* vertex markers with raw score */}
+        {dimensions.map((d, i) => {
+          const [mx, my] = pointAt(i, fracs[i]!);
+          return (
+            <g key={d.name}>
+              <circle cx={mx} cy={my} r={16} fill={SECTION_COLORS[i % SECTION_COLORS.length]} stroke="#FFFAEF" strokeWidth={2} />
+              <text
+                x={mx}
+                y={my}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize="14"
+                fontWeight="700"
+                fontFamily="Montserrat, sans-serif"
+                fill={i === 2 ? "#36211B" : "#FFFFFF"}
+              >
+                {d.score}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
 
 function ResultsWidget({ widget }: { widget: Extract<Widget, { kind: "results" }> }) {
   return (
-    <div className="flex flex-col gap-4 py-2 innergy-bubble-in">
-      <div className="rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]/20">
-        <AssessmentDonutChart dimensions={widget.dimensions} />
-      </div>
+    <div className="py-2 innergy-bubble-in">
+      <div className="rounded-3xl border border-[var(--container-light)] bg-[#FCF8ED] p-5 shadow-sm">
+        <AssessmentRadarChart dimensions={widget.dimensions} />
 
-      <div className="rounded-xl bg-[var(--foreground)] p-4 text-white shadow-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-yellow)]">
-          Overall Status
-        </div>
-        <div className="mt-1 flex items-baseline justify-between">
-          <div className="flex items-baseline gap-1.5 text-3xl font-bold">
+        <div className="mt-3 border-t border-[var(--container-light)] pt-5 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--foreground)] opacity-60">
+            Total Readiness
+          </p>
+          <p className="mt-1 font-serif text-4xl font-bold text-[var(--foreground)]">
             {widget.overall.score}
-            <span className="text-sm font-normal text-white/50">/ {widget.overall.maxScore}</span>
-          </div>
-          <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider">
-            {widget.overall.band}
-          </div>
+            <span className="ml-1 font-sans text-xl font-normal text-[var(--foreground)] opacity-40">
+              / {widget.overall.maxScore}
+            </span>
+          </p>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {widget.dimensions.map((d) => (
-          <div
-            key={d.name}
-            className="rounded-xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]"
-          >
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)] opacity-60">
-              {d.name}
+        <div className="mt-5 border-t border-[var(--container-light)]">
+          {widget.dimensions.map((d, i) => (
+            <div
+              key={d.name}
+              className="flex items-center justify-between border-b border-[var(--container-light)] py-3.5 last:border-b-0"
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: SECTION_COLORS[i % SECTION_COLORS.length] }}
+                />
+                <span className="text-sm font-medium text-[var(--foreground)]">{d.name}</span>
+              </div>
+              <div className="text-sm font-bold text-[var(--foreground)]">
+                {d.score}
+                <span className="font-normal text-[var(--foreground)] opacity-40"> / {d.maxScore}</span>
+              </div>
             </div>
-            <div className="mt-1 flex items-baseline gap-1 font-serif text-lg font-bold text-[var(--foreground)]">
-              {d.score}
-              <span className="font-sans text-[10px] font-normal text-[var(--foreground)] opacity-50">/ {d.maxScore}</span>
-            </div>
-            <div className="mt-1 text-[10px] font-medium uppercase tracking-tight text-[var(--accent-pink)] opacity-80">
-              {d.band}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

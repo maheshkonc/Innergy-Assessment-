@@ -8,6 +8,7 @@ import type { ScoreResult } from "../scoring/types";
 import type { LLMProvider } from "../../providers/llm/types";
 import { renderTemplate } from "../templates/render";
 import type { InterpretationOutput } from "./template-mode";
+import { dimensionDisplayName } from "./dimension-labels";
 
 const ResponseSchema = z.object({
   per_dimension: z
@@ -101,7 +102,7 @@ export async function interpretWithLlm(
     if (!name) throw new LlmInterpretationError(`unknown dimension ${d.dimensionId}`);
     const match = parsed.per_dimension.find((p) => p.dimension === name);
     if (!match) throw new LlmInterpretationError(`missing dimension ${name}`);
-    return { dimensionId: d.dimensionId, dimensionName: name, narrative: match.narrative };
+    return { dimensionId: d.dimensionId, dimensionName: dimensionDisplayName(name), narrative: match.narrative };
   });
 
   // Log the call (FR-5.4).
@@ -122,7 +123,7 @@ export async function interpretWithLlm(
     },
   });
 
-  const lowestName = nameById.get(score.lowestDimensionId) ?? "";
+  const lowestName = dimensionDisplayName(nameById.get(score.lowestDimensionId) ?? "");
   return {
     perDimension,
     overallNarrative: parsed.overall_narrative,

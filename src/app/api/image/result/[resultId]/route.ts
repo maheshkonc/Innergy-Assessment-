@@ -65,7 +65,7 @@ export async function GET(
 
   const segments: CircleSegment[] = [
     {
-      label: "Section 1",
+      label: "Cognitive Clarity",
       shortLabel: "CC",
       score: result.cognitiveScore,
       maxScore: maxFor("Section 1"),
@@ -73,7 +73,7 @@ export async function GET(
       colorHex: "#36211B", // Brand Dark Brown
     },
     {
-      label: "Section 2",
+      label: "Relational Influence",
       shortLabel: "RI",
       score: result.relationalScore,
       maxScore: maxFor("Section 2"),
@@ -81,7 +81,7 @@ export async function GET(
       colorHex: "#FF3F64", // Brand Pink
     },
     {
-      label: "Section 3",
+      label: "Inner Mastery",
       shortLabel: "IM",
       score: result.innerScore,
       maxScore: maxFor("Section 3"),

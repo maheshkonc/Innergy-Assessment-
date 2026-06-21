@@ -5,6 +5,7 @@
 import type { PrismaClient, Tenant, User } from "@prisma/client";
 import type { ScoreResult } from "../scoring/types";
 import { renderTemplate } from "../templates/render";
+import { dimensionDisplayName } from "./dimension-labels";
 
 export interface InterpretationOutput {
   perDimension: Array<{ dimensionId: string; dimensionName: string; narrative: string }>;
@@ -41,7 +42,7 @@ export async function interpretTemplate(
       },
     });
     if (!band) throw new Error(`No band for ${d.dimensionId} @ ${d.score}`);
-    const name = nameById.get(d.dimensionId) ?? d.dimensionId;
+    const name = dimensionDisplayName(nameById.get(d.dimensionId) ?? d.dimensionId);
     const narrative = renderTemplate(
       band.interpretationTemplate,
       {
@@ -65,7 +66,7 @@ export async function interpretTemplate(
   });
   if (!overallRow) throw new Error(`No overall band for score=${score.overallScore}`);
 
-  const lowestName = nameById.get(score.lowestDimensionId) ?? score.lowestDimensionId;
+  const lowestName = dimensionDisplayName(nameById.get(score.lowestDimensionId) ?? score.lowestDimensionId);
   const overallNarrative = renderTemplate(
     overallRow.interpretationTemplate,
     {

@@ -323,6 +323,8 @@ async function handleQuestion(
   // the incentive to finish the short form. Otherwise go straight to results.
   const position = await getContactPosition(prisma, input.tenant.id);
   if (position === "after_questions") {
+    const intro = await render(prisma, "report_contact_intro", input.tenant, {});
+    actions.push({ kind: "text", body: intro });
     const askName = await render(prisma, "ask_name", input.tenant, {});
     actions.push({ kind: "text", body: askName });
     return { actions, newContext: { state: "ask_name" } };
@@ -353,18 +355,19 @@ async function handleDebriefCta(
   const isYes = reply === "yes" || reply === "y";
   const bodyKey = isYes ? "coaching_yes" : "coaching_no";
   const body = await render(prisma, bodyKey, input.tenant, {});
-  actions.push({ kind: "text", body });
 
   // If details are captured after the results, collect them now (name → org →
   // email); the closing message + report email fire from handleAskEmail.
   const position = await getContactPosition(prisma, input.tenant.id);
   if (position === "after_results") {
+    actions.push({ kind: "text", body });
     const askName = await render(prisma, "ask_name", input.tenant, {});
     actions.push({ kind: "text", body: askName });
     return { actions, newContext: { state: "ask_name" } };
   }
 
-  // Transition to closing message and terminal state.
+  // Combine the coaching response and the closing into a single message, then
+  // transition to the terminal state.
   const closing = await render(
     prisma,
     "closing",
@@ -372,7 +375,7 @@ async function handleDebriefCta(
     { name: input.user.firstName ?? "there" },
     { allowMissing: true },
   );
-  actions.push({ kind: "text", body: closing });
+  actions.push({ kind: "text", body: `${body}\n\n${closing}` });
 
   return {
     actions,
@@ -477,7 +480,7 @@ async function buildBaseVars(prisma: PrismaClient, tenant: Tenant) {
     coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? tenant.linkedinUrl ?? "",
     name_or_there: "there",
     duration_estimate: "10–12 minutes",
-    dimension_names_list: "Section 1, Section 2, Section 3",
+    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
     question_count: 25,
   } as Record<string, string | number>;
 }

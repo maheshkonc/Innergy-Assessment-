@@ -23,12 +23,22 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
       "Instruction: Reflect on how your current team operates. This ideally is the team you are a part of or the team which reports into you.",
   },
   {
-    key: "welcome_3",
-    body: "Ready to begin? Reply YES to start, or LATER if you'd like a reminder.",
+    key: "later_ack",
+    body:
+      "Thank you for your time. If you're unable to complete this right now, that's absolutely fine—you can return and continue whenever it's convenient for you.\n\n" +
+      "If you have any questions or would like to stay connected, feel free to connect with {{coach_name}} on LinkedIn:\n{{coach_linkedin_url}}",
   },
-  { key: "later_ack", body: "No problem. I'll ping you tomorrow." },
 
   // --- Name + org capture ---
+  // Shown once when the contact step runs after the questions (the default),
+  // immediately before ask_name — frames the form as the path to the report.
+  {
+    key: "report_contact_intro",
+    body:
+      "Congratulations on completing the assessment!\n\n" +
+      "We are now generating your customized leadership insights report. Please share your details below so we can send it to you via email.\n\n" +
+      "Your report will offer a comprehensive view of how you or your team align across the full leadership spectrum, highlighting strengths, growth areas, and practical recommendations to support continued development.",
+  },
   { key: "ask_name", body: "Great. What's your first name?" },
   { key: "ask_organisation", body: "Thanks, {{name}}. And which organisation are you with?" },
   { key: "ask_email", body: "Got it. And what's your work email?" },
@@ -83,22 +93,18 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
     key: "overall_result",
     body:
       "*OVERALL: {{overall_band_label}}*\n\n" +
-      "Section 1: {{cognitive_score}} / {{cognitive_max}}\n" +
-      "Section 2: {{relational_score}} / {{relational_max}}\n" +
-      "Section 3: {{inner_score}} / {{inner_max}}\n\n" +
+      "Cognitive Clarity: {{cognitive_score}} / {{cognitive_max}}\n" +
+      "Relational Influence: {{relational_score}} / {{relational_max}}\n" +
+      "Inner Mastery: {{inner_score}} / {{inner_max}}\n\n" +
       "Total: {{overall_score}} / {{overall_max_score}}\n\n{{overall_interpretation}}",
   },
 
-  // --- Debrief CTA ---
+  // --- Debrief CTA (single combined prompt) ---
   {
     key: "debrief_cta_1",
     body:
-      "Your lowest dimension is *{{lowest_dimension_name}}*. {{coach_name}} works with senior leaders exactly on this.",
-  },
-  {
-    key: "debrief_cta_2",
-    body:
-      "Would you like a 30-minute conversation with {{coach_name}} to walk through your results? Reply YES or NO.",
+      "Your lowest dimension is *{{lowest_dimension_name}}*. {{coach_name}} works with senior leaders exactly on this.\n\n" +
+      "Would you like to have an Insight to Actionable session with {{coach_name}}? Reply YES or NO.",
   },
   {
     key: "coaching_yes",
@@ -112,9 +118,7 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   },
   {
     key: "closing",
-    body:
-      "Thanks, {{name}}. Your readout is saved and you can revisit it anytime by typing RESULTS.\n\n" +
-      "Connect with {{coach_name}} on LinkedIn: {{coach_linkedin_url}}",
+    body: "Connect with {{coach_name}} on LinkedIn: {{coach_linkedin_url}}",
   },
 
   // --- Re-entry, abandonment, safety ---

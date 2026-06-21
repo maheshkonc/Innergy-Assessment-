@@ -181,9 +181,8 @@ export async function processInboundMessage(
       },
     });
     await sendWelcomeSequence(prisma, provider, tenant, inbound.fromPhone);
-    // Welcome sequence ends with an explicit "Reply YES to start, or LATER"
-    // prompt — wait for the user's next message instead of consuming the
-    // trigger ("Hi", "START", etc.) as a YES and jumping ahead.
+    // Wait for the user's next message instead of consuming the trigger
+    // ("Hi", "START", etc.) as a YES and jumping ahead.
     return;
   }
 
@@ -266,12 +265,12 @@ async function sendWelcomeSequence(
     name_or_there: "there",
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
-    dimension_names_list: "Section 1, Section 2, Section 3",
+    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
     duration_estimate: "10–12 minutes",
     question_count: 25,
   };
 
-  for (const key of ["welcome_1", "welcome_2", "welcome_3"] as const) {
+  for (const key of ["welcome_1", "welcome_2"] as const) {
     const tpl = await resolveMessageTemplate(db, { key, tenantId: tenant.id });
     if (!tpl) {
       log.error({ tenantId: tenant.id, key }, "welcome template missing — check seed");

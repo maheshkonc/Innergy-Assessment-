@@ -139,17 +139,10 @@ export async function finaliseResults(
     lowest_dimension_name: interpretation.lowestDimensionName,
   };
   const cta1 = await resolveMessageTemplate(prisma, { key: "debrief_cta_1", tenantId: tenant.id });
-  const cta2 = await resolveMessageTemplate(prisma, { key: "debrief_cta_2", tenantId: tenant.id });
   if (cta1) {
     actions.push({
       kind: "text",
       body: renderTemplate(cta1.body, ctaVars, { allowMissing: true }),
-    });
-  }
-  if (cta2) {
-    actions.push({
-      kind: "text",
-      body: renderTemplate(cta2.body, ctaVars, { allowMissing: true }),
     });
   }
 

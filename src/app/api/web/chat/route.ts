@@ -291,7 +291,6 @@ async function renderResumeActions(
         await pushTemplate("debrief_cta_1", {
           lowest_dimension_name: stored.lowestDimensionName ?? "",
         });
-        await pushTemplate("debrief_cta_2");
       }
       break;
     }
@@ -317,7 +316,7 @@ async function buildBaseVars(tenant: Tenant): Promise<Record<string, string | nu
     coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? "",
     name_or_there: "there",
     duration_estimate: "10–12 minutes",
-    dimension_names_list: "Section 1, Section 2, Section 3",
+    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
     question_count: 25,
   };
 }
@@ -331,12 +330,12 @@ async function renderWelcomeActions(tenant: Tenant): Promise<OutboundAction[]> {
     name_or_there: "there",
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
-    dimension_names_list: "Section 1, Section 2, Section 3",
+    dimension_names_list: "Cognitive Clarity, Relational Influence, Inner Mastery",
     duration_estimate: "10–12 minutes",
     question_count: 25,
   };
   const out: OutboundAction[] = [];
-  for (const key of ["welcome_1", "welcome_2", "welcome_3"] as const) {
+  for (const key of ["welcome_1", "welcome_2"] as const) {
     const tpl = await resolveMessageTemplate(prisma, { key, tenantId: tenant.id });
     if (!tpl) {
       log.error({ key, tenantId: tenant.id }, "welcome template missing");
@@ -417,9 +416,9 @@ async function buildWidget(
           band: res.overallBand,
         },
         dimensions: [
-          { name: "Section 1", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
-          { name: "Section 2", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
-          { name: "Section 3", score: res.innerScore, maxScore: imMax, band: res.innerBand },
+          { name: "Cognitive Clarity", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
+          { name: "Relational Influence", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
+          { name: "Inner Mastery", score: res.innerScore, maxScore: imMax, band: res.innerBand },
         ],
       };
     }

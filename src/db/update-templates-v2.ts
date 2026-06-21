@@ -18,10 +18,6 @@ const TEMPLATES: Tpl[] = [
     body: "In the next 10 minutes, I'll help you understand how ready you are as a leader for the AI age — across three dimensions: how you think, how you lead your team, and how you show up under pressure.",
   },
   {
-    key: "welcome_3",
-    body: "Ready to begin? Type YES to start — or type LATER if now isn't a good time and I'll remind you tomorrow.",
-  },
-  {
     key: "ask_name",
     body: "Great. Before we start — two quick things.\n\nWhat's your first name?",
   },
@@ -54,15 +50,9 @@ const TEMPLATES: Tpl[] = [
   },
   {
     key: "debrief_cta_1",
-    body: "Your results tell a story, {{name}}. And the most valuable thing you can do with them is talk through what they mean for your specific context — your role, your team, and where you are right now.",
-  },
-  {
-    key: "debrief_cta_2",
     body:
-      "{{coach_name}} — who built this assessment — offers a limited number of 20-minute debrief conversations each month with senior leaders.\n\n" +
-      "Would you like to book one?\n\n" +
-      "Type YES to get the booking link\n" +
-      "Type NO if you'd prefer to sit with your results first",
+      "Your lowest dimension is *{{lowest_dimension_name}}*. {{coach_name}} works with senior leaders exactly on this.\n\n" +
+      "Would you like to have an Insight to Actionable session with {{coach_name}}? Reply YES or NO.",
   },
   {
     key: "coaching_yes",
