@@ -8,7 +8,7 @@ import fs from "fs";
 import path from "path";
 
 export interface CircleSegment {
-  label: string;       // "Section 1"
+  label: string;       // display name, e.g. "Cognitive Clarity"
   shortLabel: string;  // "CC"
   score: number;
   maxScore: number;

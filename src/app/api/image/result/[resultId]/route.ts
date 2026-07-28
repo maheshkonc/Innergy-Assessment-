@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/db/client";
 import { renderResultsCircle, type CircleSegment } from "@/providers/image/results-circle";
+import { loadDimensionsByTag } from "@/core/dimensions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,33 +59,34 @@ export async function GET(
     return match?.bandColorHex ?? fallbackColor(bandLabel);
   };
 
-  const maxFor = (dimensionName: string): number => {
-    const rows = dimensionBands.filter((b) => b.dimension.name === dimensionName);
+  const dims = await loadDimensionsByTag(prisma);
+  const maxFor = (dimensionId: string | undefined): number => {
+    const rows = dimensionBands.filter((b) => b.dimensionId === dimensionId);
     return rows.reduce((m, r) => Math.max(m, r.maxScore), 0);
   };
 
   const segments: CircleSegment[] = [
     {
-      label: "Section 1",
+      label: dims.cognitive?.name ?? "",
       shortLabel: "CC",
       score: result.cognitiveScore,
-      maxScore: maxFor("Section 1"),
+      maxScore: maxFor(dims.cognitive?.id),
       bandLabel: result.cognitiveBand,
       colorHex: "#36211B", // Brand Dark Brown
     },
     {
-      label: "Section 2",
+      label: dims.relational?.name ?? "",
       shortLabel: "RI",
       score: result.relationalScore,
-      maxScore: maxFor("Section 2"),
+      maxScore: maxFor(dims.relational?.id),
       bandLabel: result.relationalBand,
       colorHex: "#FF3F64", // Brand Pink
     },
     {
-      label: "Section 3",
+      label: dims.inner?.name ?? "",
       shortLabel: "IM",
       score: result.innerScore,
-      maxScore: maxFor("Section 3"),
+      maxScore: maxFor(dims.inner?.id),
       bandLabel: result.innerBand,
       colorHex: "#FFDE59", // Brand Yellow
     },

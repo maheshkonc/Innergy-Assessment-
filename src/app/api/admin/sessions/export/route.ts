@@ -1,5 +1,5 @@
-// GET /api/admin/sessions/export?ids=a,b,c
-// Returns CSV of session results. Omit `ids` to export every session.
+// GET /api/admin/sessions/export?ids=a,b,c&instrument=<instrumentId>
+// Returns CSV of session results. Omit both params to export every session.
 
 import { prisma } from "@/db/client";
 import { NextResponse, type NextRequest } from "next/server";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 const COLUMNS = [
   "SessionId",
   "Tenant",
+  "Assessment",
   "Participant",
   "Email",
   "Organisation",
@@ -39,26 +40,43 @@ export async function GET(req: NextRequest) {
   const ids = idsParam
     ? idsParam.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
+  const instrumentId = req.nextUrl.searchParams.get("instrument");
+
+  const where: Record<string, unknown> = {};
+  if (ids && ids.length > 0) where.id = { in: ids };
+  if (instrumentId) where.instrumentVersion = { instrumentId };
 
   const sessions = await prisma.session.findMany({
-    where: ids && ids.length > 0 ? { id: { in: ids } } : undefined,
+    where: Object.keys(where).length > 0 ? where : undefined,
     orderBy: { lastMessageAt: "desc" },
     include: {
       user: true,
       tenant: true,
       result: true,
+      instrumentVersion: { include: { instrument: { select: { name: true } } } },
       _count: { select: { answers: true } },
     },
   });
 
+  // Per-instrument question totals, so the Answers column reads "12/15" on a
+  // team session rather than the individual instrument's 25.
+  const totals = new Map<string, number>();
+  for (const versionId of new Set(sessions.map((s) => s.instrumentVersionId))) {
+    totals.set(
+      versionId,
+      await prisma.question.count({ where: { section: { instrumentVersionId: versionId } } }),
+    );
+  }
+
   const rows = sessions.map((s) => [
     s.id,
     s.tenant.name,
+    s.instrumentVersion.instrument.name,
     s.user.firstName ?? "",
     s.user.email ?? "",
     s.user.organisation ?? "",
     s.status,
-    `${s._count.answers}/25`,
+    `${s._count.answers}/${totals.get(s.instrumentVersionId) ?? "?"}`,
     s.startedAt.toISOString(),
     s.lastMessageAt.toISOString(),
     s.result?.overallScore ?? "",

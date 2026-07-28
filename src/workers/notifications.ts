@@ -13,6 +13,7 @@ import { Prisma } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "../db/client";
 import { log } from "../core/logger";
+import { LEGACY_DIMENSION_NAMES, type DimensionTag } from "../core/dimensions";
 import { WhatsAppCloudProvider } from "../providers/messaging/whatsapp";
 
 const MAX_ATTEMPTS = 3;
@@ -245,10 +246,12 @@ function renderUserReportEmail(
 ): { subject: string; html: string; text: string } {
   const name = enriched?.userName ?? "there";
   const overall = enriched?.overall;
+  // `narrativeFor` accepts the current display name and the pre-rename
+  // "Section N", so reports for older results still find their narrative.
   const dims = [
-    { label: "Cognitive Clarity", score: enriched?.cognitive, narrativeFor: "Section 1" },
-    { label: "Relational Influence", score: enriched?.relational, narrativeFor: "Section 2" },
-    { label: "Inner Mastery", score: enriched?.inner, narrativeFor: "Section 3" },
+    { label: "Cognitive Clarity", score: enriched?.cognitive, tag: "cognitive" as const },
+    { label: "Relational Influence", score: enriched?.relational, tag: "relational" as const },
+    { label: "Inner Mastery", score: enriched?.inner, tag: "inner" as const },
   ];
   const perDim = enriched?.interpretation?.perDimension ?? [];
   const overallNarrative = enriched?.interpretation?.overallNarrative ?? "";
@@ -284,7 +287,7 @@ function renderUserReportEmail(
   const dimBlocks = dims
     .map((d) => {
       if (!d.score) return "";
-      const narrative = perDim.find((p) => p.dimensionName === d.narrativeFor)?.narrative ?? "";
+      const narrative = findNarrative(perDim, d.tag, d.label);
       return `
         <tr><td style="padding:0 24px 16px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid ${containerLight};border-left:4px solid ${accentYellow};border-radius:14px">
@@ -388,7 +391,7 @@ function renderUserReportEmail(
     "",
     ...dims.flatMap((d) => {
       if (!d.score) return [];
-      const narrative = perDim.find((p) => p.dimensionName === d.narrativeFor)?.narrative ?? "";
+      const narrative = findNarrative(perDim, d.tag, d.label);
       return [`${d.label}: ${d.score.score} · ${d.score.band}`, narrative, ""];
     }),
     bookingUrl ? `Book a debrief with ${coachName}: ${bookingUrl}` : "",
@@ -438,3 +441,21 @@ if (isEntry) {
   });
 }
 
+/**
+ * Finds a dimension's narrative in a stored result. Accepts the current
+ * display name and the pre-rename "Section N", so reports generated before the
+ * dimensions were renamed still resolve.
+ */
+function findNarrative(
+  perDim: Array<{ dimensionName: string; narrative: string }>,
+  tag: DimensionTag,
+  currentLabel: string,
+): string {
+  const accepted = [currentLabel, LEGACY_DIMENSION_NAMES[tag]].map((n) =>
+    n.trim().toLowerCase(),
+  );
+  return (
+    perDim.find((p) => accepted.includes(p.dimensionName.trim().toLowerCase()))
+      ?.narrative ?? ""
+  );
+}

@@ -1,7 +1,9 @@
 // Pure types for the scoring engine. No framework, no I/O.
 // Consumed by src/core/scoring/engine.ts and the seed fixtures.
 
-export type OptionLabel = "A" | "B" | "C" | "D";
+// E only appears on 5-point Likert instruments (the team diagnostic); the
+// original A–D instruments never emit it.
+export type OptionLabel = "A" | "B" | "C" | "D" | "E";
 
 export interface OptionSpec {
   label: OptionLabel;

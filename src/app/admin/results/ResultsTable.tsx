@@ -9,11 +9,20 @@ type Row = {
   status: string;
   lastMessageAt: string;
   answeredCount: number;
+  totalQuestions: number;
+  assessment: string;
   user: { firstName: string | null; email: string | null; organisation: string | null };
   result: { overallScore: number; overallBand: string } | null;
 };
 
-export function ResultsTable({ rows }: { rows: Row[] }) {
+export function ResultsTable({
+  rows,
+  instrumentFilterId,
+}: {
+  rows: Row[];
+  /** When set, "Export All" exports only this assessment's sessions. */
+  instrumentFilterId?: string | null;
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const allSelected = rows.length > 0 && selected.size === rows.length;
@@ -31,7 +40,9 @@ export function ResultsTable({ rows }: { rows: Row[] }) {
     });
   };
 
-  const exportAllHref = "/api/admin/sessions/export";
+  const exportAllHref = instrumentFilterId
+    ? `/api/admin/sessions/export?instrument=${encodeURIComponent(instrumentFilterId)}`
+    : "/api/admin/sessions/export";
   const exportSelectedHref = useMemo(() => {
     if (selected.size === 0) return null;
     const ids = Array.from(selected).join(",");
@@ -59,7 +70,7 @@ export function ResultsTable({ rows }: { rows: Row[] }) {
           href={exportAllHref}
           className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
         >
-          Export All
+          {instrumentFilterId ? "Export Filtered" : "Export All"}
         </a>
       </div>
 
@@ -78,6 +89,7 @@ export function ResultsTable({ rows }: { rows: Row[] }) {
               />
             </th>
             <th className="px-3 py-2">Participant</th>
+            <th className="px-3 py-2">Assessment</th>
             <th className="px-3 py-2">Organisation</th>
             <th className="px-3 py-2">Score</th>
             <th className="px-3 py-2">Status</th>
@@ -100,6 +112,11 @@ export function ResultsTable({ rows }: { rows: Row[] }) {
               <td className="px-3 py-3">
                 <div className="font-medium text-slate-900">{s.user.firstName ?? "Anonymous"}</div>
                 <div className="text-xs text-slate-500">{s.user.email ?? "No email"}</div>
+              </td>
+              <td className="px-3 py-3">
+                <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-700">
+                  {s.assessment}
+                </span>
               </td>
               <td className="px-3 py-3 text-slate-600">{s.user.organisation ?? "—"}</td>
               <td className="px-3 py-3">
@@ -125,7 +142,9 @@ export function ResultsTable({ rows }: { rows: Row[] }) {
                   {s.status}
                 </span>
               </td>
-              <td className="px-3 py-3 text-slate-500">{s.answeredCount} / 25</td>
+              <td className="px-3 py-3 text-slate-500">
+                {s.answeredCount}{s.totalQuestions ? ` / ${s.totalQuestions}` : ""}
+              </td>
               <td className="px-3 py-3 text-xs text-slate-500">
                 {s.lastMessageAt.slice(0, 16).replace("T", " ")}
               </td>
@@ -146,7 +165,7 @@ export function ResultsTable({ rows }: { rows: Row[] }) {
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={8} className="px-3 py-10 text-center text-sm text-slate-500">
+              <td colSpan={9} className="px-3 py-10 text-center text-sm text-slate-500">
                 No assessment sessions found.
               </td>
             </tr>

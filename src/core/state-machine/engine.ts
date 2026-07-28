@@ -8,10 +8,15 @@
 
 import type { PrismaClient, Session, Tenant, User } from "@prisma/client";
 import { renderTemplate, TemplateError } from "../templates/render";
-import { resolveMessageTemplate } from "../templates/resolve";
+import {
+  getInstrumentCopy,
+  resolveVariantTemplate,
+  type InstrumentCopy,
+} from "../templates/variant";
 import { normaliseOptionReply } from "../scoring/normalise";
 import { enqueueUserReportNotification } from "../notifications/create";
 import { log } from "../logger";
+import { DIMENSION_TAGS, loadDimensionsByTag } from "../dimensions";
 import type { FsmContext, FsmState } from "./types";
 
 // Where the name/company/email step sits in the flow. Configured per tenant
@@ -64,12 +69,20 @@ export interface HandleInboundResult {
   terminalStatus?: "completed" | "abandoned" | "escalated";
 }
 
+// The session's instrument decides which copy variant the handlers render.
+// Resolved once per inbound message, then passed down.
+type FlowInput = HandleInboundInput & { copy: InstrumentCopy };
+
 export async function handleInbound(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  rawInput: HandleInboundInput,
 ): Promise<HandleInboundResult> {
-  const ctx = (input.session.fsmState as unknown as FsmContext) ?? { state: "welcome" };
+  const ctx = (rawInput.session.fsmState as unknown as FsmContext) ?? { state: "welcome" };
   const actions: OutboundAction[] = [];
+  const input: FlowInput = {
+    ...rawInput,
+    copy: await getInstrumentCopy(prisma, rawInput.session.instrumentVersionId),
+  };
 
   switch (ctx.state) {
     case "welcome":
@@ -104,14 +117,14 @@ export async function handleInbound(
 
 async function handleWelcome(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   _ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const reply = input.text.trim().toLowerCase();
   // Explicit defer keeps the defined off-ramp (PRD §6 later_ack path).
   if (/^(later|l|not\s*now|no|nope)\b/.test(reply)) {
-    const body = await render(prisma, "later_ack", input.tenant, {});
+    const body = await render(prisma, "later_ack", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "later_reminder" } };
   }
@@ -119,7 +132,7 @@ async function handleWelcome(
   // already opted in by sending a message after the QR scan, so advance.
   const position = await getContactPosition(prisma, input.tenant.id);
   if (position === "before_questions") {
-    const body = await render(prisma, "ask_name", input.tenant, {});
+    const body = await render(prisma, "ask_name", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "ask_name" } };
   }
@@ -131,14 +144,14 @@ async function handleWelcome(
 // state. Shared by the welcome handler (start of flow).
 async function startDiagnostic(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const firstSection = await prisma.section.findFirst({
     where: { instrumentVersionId: input.session.instrumentVersionId, displayOrder: 1 },
   });
   if (firstSection) {
-    const intro = await render(prisma, firstSection.introTemplateKey, input.tenant, {});
+    const intro = await render(prisma, firstSection.introTemplateKey, input, {});
     actions.push({ kind: "text", body: intro });
     actions.push({ kind: "voice_if_enabled", body: intro });
   }
@@ -148,20 +161,20 @@ async function startDiagnostic(
 
 async function handleAskName(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   _ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const name = sanitiseFreeText(input.text);
   if (!name) {
-    const body = await render(prisma, "invalid_answer", input.tenant, {});
+    const body = await render(prisma, "invalid_answer", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "ask_name" } };
   }
 
   // Voice path: confirm before storing (FR-10.3).
   if (input.inputWasVoice) {
-    const body = await render(prisma, "voice_confirm_name", input.tenant, {
+    const body = await render(prisma, "voice_confirm_name", input, {
       heard: input.voiceTranscript ?? name,
     });
     actions.push({ kind: "text", body });
@@ -169,39 +182,39 @@ async function handleAskName(
   }
 
   await prisma.user.update({ where: { id: input.user.id }, data: { firstName: name } });
-  const body = await render(prisma, "ask_organisation", input.tenant, { name });
+  const body = await render(prisma, "ask_organisation", input, { name });
   actions.push({ kind: "text", body });
   return { actions, newContext: { state: "ask_org" } };
 }
 
 async function handleAskOrg(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   _ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const org = sanitiseFreeText(input.text);
   if (!org) {
-    const body = await render(prisma, "invalid_answer", input.tenant, {});
+    const body = await render(prisma, "invalid_answer", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "ask_org" } };
   }
   await prisma.user.update({ where: { id: input.user.id }, data: { organisation: org } });
   const name = input.user.firstName ?? org;
-  const body = await render(prisma, "ask_email", input.tenant, { name });
+  const body = await render(prisma, "ask_email", input, { name });
   actions.push({ kind: "text", body });
   return { actions, newContext: { state: "ask_email" } };
 }
 
 async function handleAskEmail(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   _ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const email = sanitiseFreeText(input.text);
   if (!email || !email.includes("@")) {
-    const body = await render(prisma, "invalid_answer", input.tenant, {});
+    const body = await render(prisma, "invalid_answer", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "ask_email" } };
   }
@@ -224,7 +237,7 @@ async function handleAskEmail(
     const closing = await render(
       prisma,
       "closing",
-      input.tenant,
+      input,
       { name },
       { allowMissing: true },
     );
@@ -247,7 +260,7 @@ async function handleAskEmail(
   const calcBody = await render(
     prisma,
     "calculating",
-    input.tenant,
+    input,
     { name },
     { allowMissing: true },
   );
@@ -258,7 +271,7 @@ async function handleAskEmail(
 
 async function handleQuestion(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
@@ -272,14 +285,14 @@ async function handleQuestion(
 
   const label = normaliseOptionReply(input.text);
   if (!label) {
-    const body = await render(prisma, "invalid_answer", input.tenant, {});
+    const body = await render(prisma, "invalid_answer", input, {});
     actions.push({ kind: "log_invalid", reason: `cannot parse ${input.text}` }, { kind: "text", body });
     return { actions, newContext: ctx };
   }
 
   const option = q.options.find((o) => o.label === label);
   if (!option) {
-    const body = await render(prisma, "invalid_answer", input.tenant, {});
+    const body = await render(prisma, "invalid_answer", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: ctx };
   }
@@ -309,7 +322,7 @@ async function handleQuestion(
     if (next.sectionId !== q.sectionId) {
       const section = await prisma.section.findUnique({ where: { id: next.sectionId } });
       if (section) {
-        const intro = await render(prisma, section.introTemplateKey, input.tenant, {});
+        const intro = await render(prisma, section.introTemplateKey, input, {});
         actions.push({ kind: "text", body: intro });
         actions.push({ kind: "voice_if_enabled", body: intro });
       }
@@ -323,7 +336,7 @@ async function handleQuestion(
   // the incentive to finish the short form. Otherwise go straight to results.
   const position = await getContactPosition(prisma, input.tenant.id);
   if (position === "after_questions") {
-    const askName = await render(prisma, "ask_name", input.tenant, {});
+    const askName = await render(prisma, "ask_name", input, {});
     actions.push({ kind: "text", body: askName });
     return { actions, newContext: { state: "ask_name" } };
   }
@@ -331,7 +344,7 @@ async function handleQuestion(
   const calcBody = await render(
     prisma,
     "calculating",
-    input.tenant,
+    input,
     {
       total_questions: questions.length,
       name: input.user.firstName ?? "there",
@@ -345,21 +358,21 @@ async function handleQuestion(
 
 async function handleDebriefCta(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const reply = input.text.trim().toLowerCase();
   const isYes = reply === "yes" || reply === "y";
   const bodyKey = isYes ? "coaching_yes" : "coaching_no";
-  const body = await render(prisma, bodyKey, input.tenant, {});
+  const body = await render(prisma, bodyKey, input, {});
   actions.push({ kind: "text", body });
 
   // If details are captured after the results, collect them now (name → org →
   // email); the closing message + report email fire from handleAskEmail.
   const position = await getContactPosition(prisma, input.tenant.id);
   if (position === "after_results") {
-    const askName = await render(prisma, "ask_name", input.tenant, {});
+    const askName = await render(prisma, "ask_name", input, {});
     actions.push({ kind: "text", body: askName });
     return { actions, newContext: { state: "ask_name" } };
   }
@@ -368,7 +381,7 @@ async function handleDebriefCta(
   const closing = await render(
     prisma,
     "closing",
-    input.tenant,
+    input,
     { name: input.user.firstName ?? "there" },
     { allowMissing: true },
   );
@@ -384,7 +397,7 @@ async function handleDebriefCta(
 
 async function handlePostFlow(
   _prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   ctx: FsmContext,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
@@ -407,7 +420,7 @@ function sanitiseFreeText(raw: string): string | null {
 
 async function enqueueQuestion(
   prisma: PrismaClient,
-  input: HandleInboundInput,
+  input: FlowInput,
   index: number,
   actions: OutboundAction[],
 ) {
@@ -424,7 +437,7 @@ async function enqueueQuestion(
   const sectionQuestions = questions.filter((x) => x.sectionId === q.sectionId);
   const questionInSection = sectionQuestions.findIndex((x) => x.id === q.id) + 1;
 
-  const body = await render(prisma, "question_body", input.tenant, {
+  const body = await render(prisma, "question_body", input, {
     question_number: questionInSection,
     question_count: sectionQuestions.length,
     section_name: section?.dimension.name ?? "",
@@ -433,6 +446,8 @@ async function enqueueQuestion(
     option_b: optByLabel.B ?? "",
     option_c: optByLabel.C ?? "",
     option_d: optByLabel.D ?? "",
+    // Only 5-point Likert instruments carry an E; A–D questions render "".
+    option_e: optByLabel.E ?? "",
   });
   actions.push({ kind: "text", body });
 }
@@ -454,30 +469,40 @@ async function loadOrderedQuestions(prisma: PrismaClient, instrumentVersionId: s
 async function render(
   prisma: PrismaClient,
   key: string,
-  tenant: Tenant,
+  input: FlowInput,
   extraVars: Record<string, string | number>,
   opts: { allowMissing?: boolean } = {},
 ): Promise<string> {
-  const tpl = await resolveMessageTemplate(prisma, { key, tenantId: tenant.id });
+  const tpl = await resolveVariantTemplate(prisma, {
+    key,
+    tenantId: input.tenant.id,
+    variant: input.copy.variant,
+  });
   if (!tpl) throw new TemplateError(`no template for key=${key}`, { templateKey: key });
-  const base = await buildBaseVars(prisma, tenant);
+  const base = await buildBaseVars(prisma, input.tenant, input.copy);
   return renderTemplate(tpl.body, { ...base, ...extraVars }, { templateKey: key, allowMissing: opts.allowMissing });
 }
 
-async function buildBaseVars(prisma: PrismaClient, tenant: Tenant) {
+async function buildBaseVars(prisma: PrismaClient, tenant: Tenant, copy: InstrumentCopy) {
   // Coach is looked up fresh each render so edits propagate immediately.
   const coachJoin = await prisma.tenantCoach.findFirst({
     where: { tenantId: tenant.id, isPrimary: true },
     include: { coach: true },
   });
+  const dims = await loadDimensionsByTag(prisma);
+  const dimensionNamesList = DIMENSION_TAGS.map((t) => dims[t]?.name)
+    .filter(Boolean)
+    .join(", ");
   return {
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
     coach_booking_url: coachJoin?.coach.bookingUrl ?? "",
     coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? tenant.linkedinUrl ?? "",
     name_or_there: "there",
-    duration_estimate: "10–12 minutes",
-    dimension_names_list: "Section 1, Section 2, Section 3",
-    question_count: 25,
+    // Length/duration come from the instrument version, so the 15-question
+    // team diagnostic doesn't advertise the individual one's 25.
+    duration_estimate: copy.durationEstimate,
+    dimension_names_list: dimensionNamesList,
+    question_count: copy.questionCount,
   } as Record<string, string | number>;
 }

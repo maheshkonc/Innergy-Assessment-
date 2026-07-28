@@ -3,7 +3,7 @@
 // provider. Cookie-based anonymous identity (see core/web-session/identity).
 //
 // Contract (POST):
-//   request:  { text?: string, tenantSlug?: string }
+//   request:  { text?: string, tenantSlug?: string, audience?: "individual"|"team" }
 //   response: {
 //     sessionId, state, actions: [{kind:"text"|"image", body?, imageUrl?}],
 //     widget: { kind, ...fields }
@@ -16,7 +16,8 @@ import { prisma } from "@/db/client";
 import { readOrMintWebId } from "@/core/web-session/identity";
 import { handleInbound, type OutboundAction } from "@/core/state-machine/engine";
 import { finaliseResults, resendLatestResults } from "@/core/state-machine/results";
-import { resolveMessageTemplate } from "@/core/templates/resolve";
+import { getInstrumentCopy, resolveVariantTemplate } from "@/core/templates/variant";
+import { DIMENSION_TAGS, loadDimensionsByTag } from "@/core/dimensions";
 import { renderTemplate } from "@/core/templates/render";
 import type { FsmContext } from "@/core/state-machine/types";
 import type { Prisma, Session, Tenant, User } from "@prisma/client";
@@ -40,7 +41,7 @@ type Widget =
     total: number;
     sectionName: string;
     stem: string;
-    options: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
+    options: Array<{ label: "A" | "B" | "C" | "D" | "E"; text: string }>;
   }
   | { kind: "yes_no"; context: "debrief_cta" | "coaching_interest" }
   | {
@@ -65,7 +66,9 @@ export async function POST(req: NextRequest) {
     text?: string;
     tenantSlug?: string;
     reset?: boolean;
+    audience?: string;
   };
+  const audience: Audience = body.audience === "team" ? "team" : "individual";
   const identity = readOrMintWebId(req);
 
   const tenant = await resolveTenant(body.tenantSlug);
@@ -97,24 +100,37 @@ export async function POST(req: NextRequest) {
     where: { tenantId: tenant.id, userId: user.id, status: "in_progress" },
   });
 
+  // The visitor picked a different diagnostic than the one they have open —
+  // retire the old session so the new choice actually takes effect.
+  if (session && (await audienceOf(session.instrumentVersionId)) !== audience) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { status: "abandoned", abandonedAt: new Date(), whatsappPhone: null },
+    });
+    session = null;
+  }
+
   const actions: OutboundAction[] = [];
 
   // --- Bootstrap: first call, no in-progress session yet ---
   if (!session) {
-    const ti = await prisma.tenantInstrument.findFirst({ where: { tenantId: tenant.id } });
-    if (!ti) {
-      return NextResponse.json({ error: "tenant has no instrument assigned" }, { status: 500 });
+    const instrumentVersionId = await resolveInstrumentForAudience(tenant.id, audience);
+    if (!instrumentVersionId) {
+      return NextResponse.json(
+        { error: `tenant has no ${audience} instrument assigned` },
+        { status: 500 },
+      );
     }
     session = await prisma.session.create({
       data: {
         tenantId: tenant.id,
         userId: user.id,
-        instrumentVersionId: ti.instrumentVersionId,
+        instrumentVersionId,
         status: "in_progress",
         fsmState: { state: "welcome" } as unknown as Prisma.InputJsonValue,
       },
     });
-    actions.push(...(await renderWelcomeActions(tenant)));
+    actions.push(...(await renderWelcomeActions(tenant, instrumentVersionId)));
 
     const resp: ChatResponse = {
       sessionId: session.id,
@@ -203,6 +219,43 @@ export async function POST(req: NextRequest) {
 
 // ----------------- helpers -----------------
 
+export type Audience = "individual" | "team";
+
+/**
+ * Picks the tenant's instrument version for the requested audience, reading the
+ * `audience` field each version declares in its metadata. Falls back to the
+ * tenant's only instrument when nothing is tagged (pre-team-edition data).
+ */
+async function resolveInstrumentForAudience(
+  tenantId: string,
+  audience: Audience,
+): Promise<string | null> {
+  const joins = await prisma.tenantInstrument.findMany({
+    where: { tenantId },
+    include: { instrumentVersion: { select: { id: true, metadata: true } } },
+    orderBy: { effectiveFrom: "asc" },
+  });
+  if (joins.length === 0) return null;
+
+  const match = joins.find((j) => {
+    const meta = (j.instrumentVersion.metadata ?? {}) as Record<string, unknown>;
+    return meta.audience === audience;
+  });
+  if (match) return match.instrumentVersionId;
+
+  // Untagged data: only the individual diagnostic can be served safely.
+  return audience === "individual" ? (joins[0]?.instrumentVersionId ?? null) : null;
+}
+
+async function audienceOf(instrumentVersionId: string): Promise<Audience> {
+  const v = await prisma.instrumentVersion.findUnique({
+    where: { id: instrumentVersionId },
+    select: { metadata: true },
+  });
+  const meta = (v?.metadata ?? {}) as Record<string, unknown>;
+  return meta.audience === "team" ? "team" : "individual";
+}
+
 async function resolveTenant(slug?: string): Promise<Tenant | null> {
   if (slug) {
     return prisma.tenant.findUnique({ where: { slug } });
@@ -220,10 +273,15 @@ async function renderResumeActions(
   ctx: FsmContext,
 ): Promise<OutboundAction[]> {
   const out: OutboundAction[] = [];
-  const baseVars = await buildBaseVars(tenant);
+  const copy = await getInstrumentCopy(prisma, session.instrumentVersionId);
+  const baseVars = await buildBaseVars(tenant, session.instrumentVersionId);
 
   const pushTemplate = async (key: string, extra: Record<string, string | number> = {}) => {
-    const tpl = await resolveMessageTemplate(prisma, { key, tenantId: tenant.id });
+    const tpl = await resolveVariantTemplate(prisma, {
+      key,
+      tenantId: tenant.id,
+      variant: copy.variant,
+    });
     if (!tpl) return;
     out.push({
       kind: "text",
@@ -236,7 +294,7 @@ async function renderResumeActions(
     case "later_reminder":
       // Re-emit the full welcome so returning users get the full context,
       // not a naked widget.
-      out.push(...(await renderWelcomeActions(tenant)));
+      out.push(...(await renderWelcomeActions(tenant, session.instrumentVersionId)));
       break;
 
     case "ask_name":
@@ -305,39 +363,55 @@ async function renderResumeActions(
   return out;
 }
 
-async function buildBaseVars(tenant: Tenant): Promise<Record<string, string | number>> {
+async function buildBaseVars(
+  tenant: Tenant,
+  instrumentVersionId: string,
+): Promise<Record<string, string | number>> {
   const coachJoin = await prisma.tenantCoach.findFirst({
     where: { tenantId: tenant.id, isPrimary: true },
     include: { coach: true },
   });
+  const copy = await getInstrumentCopy(prisma, instrumentVersionId);
+  const dims = await loadDimensionsByTag(prisma);
+  const dimensionNamesList = DIMENSION_TAGS.map((x) => dims[x]?.name).filter(Boolean).join(", ");
   return {
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
     coach_booking_url: coachJoin?.coach.bookingUrl ?? "",
     coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? "",
     name_or_there: "there",
-    duration_estimate: "10–12 minutes",
-    dimension_names_list: "Section 1, Section 2, Section 3",
-    question_count: 25,
+    duration_estimate: copy.durationEstimate,
+    dimension_names_list: dimensionNamesList,
+    question_count: copy.questionCount,
   };
 }
 
-async function renderWelcomeActions(tenant: Tenant): Promise<OutboundAction[]> {
+async function renderWelcomeActions(
+  tenant: Tenant,
+  instrumentVersionId: string,
+): Promise<OutboundAction[]> {
+  const copy = await getInstrumentCopy(prisma, instrumentVersionId);
   const coachJoin = await prisma.tenantCoach.findFirst({
     where: { tenantId: tenant.id, isPrimary: true },
     include: { coach: true },
   });
+  const dims = await loadDimensionsByTag(prisma);
+  const dimensionNamesList = DIMENSION_TAGS.map((x) => dims[x]?.name).filter(Boolean).join(", ");
   const vars = {
     name_or_there: "there",
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
-    dimension_names_list: "Section 1, Section 2, Section 3",
-    duration_estimate: "10–12 minutes",
-    question_count: 25,
+    dimension_names_list: dimensionNamesList,
+    duration_estimate: copy.durationEstimate,
+    question_count: copy.questionCount,
   };
   const out: OutboundAction[] = [];
   for (const key of ["welcome_1", "welcome_2", "welcome_3"] as const) {
-    const tpl = await resolveMessageTemplate(prisma, { key, tenantId: tenant.id });
+    const tpl = await resolveVariantTemplate(prisma, {
+      key,
+      tenantId: tenant.id,
+      variant: copy.variant,
+    });
     if (!tpl) {
       log.error({ key, tenantId: tenant.id }, "welcome template missing");
       continue;
@@ -401,12 +475,12 @@ async function buildWidget(
         where: { instrumentVersionId: res.instrumentVersionId },
         include: { dimension: true },
       });
-      const maxFor = (name: string) =>
-        bands.filter((b) => b.dimension.name === name).reduce((m, b) => Math.max(m, b.maxScore), 0);
-      const ccMax = maxFor("Section 1");
-      const riMax = maxFor("Section 2");
-      const imMax = maxFor("Section 3");
-      const base = process.env.APP_BASE_URL ?? "";
+      const dims = await loadDimensionsByTag(db);
+      const maxFor = (dimensionId: string | undefined) =>
+        bands.filter((b) => b.dimensionId === dimensionId).reduce((m, b) => Math.max(m, b.maxScore), 0);
+      const ccMax = maxFor(dims.cognitive?.id);
+      const riMax = maxFor(dims.relational?.id);
+      const imMax = maxFor(dims.inner?.id);
       return {
         kind: "results",
         resultId: res.id,
@@ -417,9 +491,9 @@ async function buildWidget(
           band: res.overallBand,
         },
         dimensions: [
-          { name: "Section 1", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
-          { name: "Section 2", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
-          { name: "Section 3", score: res.innerScore, maxScore: imMax, band: res.innerBand },
+          { name: dims.cognitive?.name ?? "", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
+          { name: dims.relational?.name ?? "", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
+          { name: dims.inner?.name ?? "", score: res.innerScore, maxScore: imMax, band: res.innerBand },
         ],
       };
     }
@@ -446,7 +520,7 @@ async function loadOrderedQuestions(db: typeof prisma, instrumentVersionId: stri
       id: q.id,
       stem: q.stem,
       sectionName: s.dimension.name,
-      options: q.options.map((o) => ({ label: o.label as "A" | "B" | "C" | "D", text: o.text })),
+      options: q.options.map((o) => ({ label: o.label as "A" | "B" | "C" | "D" | "E", text: o.text })),
     })),
   );
 }

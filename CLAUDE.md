@@ -95,6 +95,67 @@ Template lookup precedence: **tenant override → global default**. Missing both
 - **Coach**: Rashmi Sharma. Booking URL + notification channel TBC (§12.9).
 - **Feature flags (Innergy V1)**: `voice_enabled=true`, `llm_interpretation=false` (Template mode for launch, per §12.5 recommendation), `email_capture=false`, `dynamic_image_gen=false` (static fallback first, §12.10).
 
+## Two instruments: individual + team
+
+The tenant offers two diagnostics. `/take` shows a card chooser first, then loads
+the chosen one; `?type=individual` / `?type=team` deep-link past the chooser.
+
+| | Individual | Team |
+|---|---|---|
+| Instrument | `innergy_fls_v1` | `innergy_team_v1` |
+| Source | PRD §7 | `Full Spectrum Leadership Diagnostic For TEAM (1).docx` |
+| Respondent | the leader, about themselves | a CEO/CHRO, about their top 10–20 leaders as a group |
+| Questions | 25 (8 / 9 / 8) | 15 (5 / 6 / 4) |
+| Answers | bespoke A–D options, per-option scores | 1–5 Likert, stored as options A–E scoring 1–5 |
+| Max | 123 (38 + 45 + 40) | 75 (25 + 30 + 20) |
+| Copy | global `MessageTemplate` keys | `team_`-prefixed keys, falling back to global |
+
+How the two stay on one state machine:
+
+- **Audience routing.** Each `InstrumentVersion.metadata` carries
+  `audience: "individual" | "team"`. The web chat route resolves the tenant's
+  instrument by that field rather than `findFirst`. Switching audience mid-flow
+  abandons the open session and starts the other one.
+- **Copy variants.** `metadata.templateVariant` (`"team"`) makes template lookups
+  try `team_<key>` before `<key>` — see `src/core/templates/variant.ts`. Only
+  genuinely different wording is duplicated; everything else falls back.
+- **Length/duration** come from `metadata.questionCount` / `durationEstimate`,
+  not hardcoded, so the welcome copy advertises the right numbers.
+
+### Admin
+
+Instrument-scoped pages read `?instrument=<instrumentId>` and render an
+assessment switcher; the shared resolver is
+[`src/app/admin/instrument-scope.ts`](./src/app/admin/instrument-scope.ts).
+Never reintroduce `instrument.findFirst()` on an admin page — with two
+instruments it silently picks one.
+
+| Page | Scoping |
+|---|---|
+| Overview | per-assessment session/completion/result breakdown |
+| Questions, Scoring | switcher; edits apply to the selected instrument |
+| Results, Users | switcher incl. "All"; Assessment column; filtered CSV export |
+| Result detail | shows instrument name + `/max` from that version's bands |
+| Analytics | switcher; **must** stay scoped — pooling a /123 and a /75 instrument yields averages, percentiles and histograms describing no real population |
+| Templates | filter by copy variant (Shared / Team) |
+
+Anything derived from instrument length or scale (histogram bins, the "reached
+midway" funnel step, `answers/N` denominators) is read from the instrument
+version, never hardcoded.
+
+Open items on the team instrument (flagged in
+[`innergy_team_v1.ts`](./src/db/seed/fixtures/innergy_team_v1.ts) — get Rashmi's
+sign-off before production):
+
+1. **Band calibration.** The source doc prints one set of section bands
+   (20-25 / 14-19 / 8-13 / 5-7) that only fits a /25 section. Applied literally,
+   Section B's 26–30 falls in no band and Section C can never reach "Strong".
+   The fixture scales the cutoffs proportionally per section; raw totals still
+   display as /25, /30, /20 as the doc prints them.
+2. **Dimension name.** The doc says "Inner Resilience" in its narrative and
+   "Inner Mastery" in the Section C heading. The fixture reuses the existing
+   Inner Mastery dimension row.
+
 ## Non-negotiables (acceptance criteria — PRD §11)
 
 1. Two tenants, two QR codes, zero cross-tenant leakage.

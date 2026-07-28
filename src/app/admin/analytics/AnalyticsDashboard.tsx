@@ -17,6 +17,9 @@ type Analytics = {
   scope: {
     filtered: boolean;
     userIdsCount: number | null;
+    instrumentId: string | null;
+    overallMax: number;
+    questionTotal: number;
     totals: { sessions: number; results: number; abandoned: number; inProgress: number };
   };
   kpis: {
@@ -41,7 +44,16 @@ type Analytics = {
   radar: { dimension: string; avg: number }[];
 };
 
-export function AnalyticsDashboard({ candidates }: { candidates: Candidate[] }) {
+export function AnalyticsDashboard({
+  candidates,
+  instrumentId,
+  instrumentName,
+}: {
+  candidates: Candidate[];
+  /** Scopes every figure to one assessment — the two use different maxima. */
+  instrumentId?: string | null;
+  instrumentName?: string | null;
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [data, setData] = useState<Analytics | null>(null);
@@ -66,7 +78,10 @@ export function AnalyticsDashboard({ candidates }: { candidates: Candidate[] }) 
       setLoading(true);
       setError(null);
       try {
-        const qs = selected.size > 0 ? `?userIds=${Array.from(selected).join(",")}` : "";
+        const params = new URLSearchParams();
+        if (selected.size > 0) params.set("userIds", Array.from(selected).join(","));
+        if (instrumentId) params.set("instrument", instrumentId);
+        const qs = params.toString() ? `?${params.toString()}` : "";
         const res = await fetch(`/api/admin/analytics${qs}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         const json = (await res.json()) as Analytics;
@@ -77,7 +92,7 @@ export function AnalyticsDashboard({ candidates }: { candidates: Candidate[] }) 
         if (myReq === reqId.current) setLoading(false);
       }
     },
-    [selected],
+    [selected, instrumentId],
   );
 
   useEffect(() => {
@@ -103,7 +118,14 @@ export function AnalyticsDashboard({ candidates }: { candidates: Candidate[] }) 
     <div>
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Analytics</h1>
+          <h1 className="text-2xl font-semibold">
+            Analytics
+            {instrumentName ? (
+              <span className="ml-2 text-base font-normal text-slate-500">
+                · {instrumentName}
+              </span>
+            ) : null}
+          </h1>
           <p className="text-sm text-slate-500">
             {selected.size === 0
               ? `All candidates (${candidates.length})`
