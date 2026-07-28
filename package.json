@@ -2,7 +2,7 @@
   "name": "innergy-fls-coach",
   "version": "0.1.0",
   "private": true,
-  "description": "Innergy — Full-Spectrum Leadership Coach (V1 MVP). Multi-tenant WhatsApp diagnostic + admin dashboard.",
+  "description": "Innergy \u2014 Full-Spectrum Leadership Coach (V1 MVP). Multi-tenant WhatsApp diagnostic + admin dashboard.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -16,8 +16,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx src/db/seed/index.ts",
     "db:reset": "prisma migrate reset --force && pnpm db:seed",
-    "worker:abandonment": "tsx src/workers/abandonment.ts",
-    "worker:notifications": "tsx src/workers/notifications.ts",
+    "worker:abandonment": "tsx --env-file=.env src/workers/abandonment.ts",
+    "worker:notifications": "tsx --env-file=.env src/workers/notifications.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

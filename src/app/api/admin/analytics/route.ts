@@ -1,5 +1,9 @@
-// GET /api/admin/analytics?userIds=a,b,c
+// GET /api/admin/analytics?userIds=a,b,c&instrument=<instrumentId>
 // Returns aggregated analytics for the supplied users (or all when omitted).
+//
+// `instrument` matters: the individual and team diagnostics score out of 123
+// and 75 respectively, so pooling them would produce averages, percentiles and
+// histograms that describe no real population. Callers should scope to one.
 
 import { prisma } from "@/db/client";
 import { NextResponse, type NextRequest } from "next/server";
@@ -20,8 +24,42 @@ export async function GET(req: NextRequest) {
     ? idsParam.split(",").map((s) => s.trim()).filter(Boolean)
     : null;
 
-  const sessionWhere = userIds && userIds.length > 0 ? { userId: { in: userIds } } : {};
-  const resultWhere = userIds && userIds.length > 0 ? { userId: { in: userIds } } : {};
+  const instrumentId = req.nextUrl.searchParams.get("instrument");
+
+  const sessionWhere: Record<string, unknown> =
+    userIds && userIds.length > 0 ? { userId: { in: userIds } } : {};
+  const resultWhere: Record<string, unknown> =
+    userIds && userIds.length > 0 ? { userId: { in: userIds } } : {};
+  if (instrumentId) {
+    sessionWhere.instrumentVersion = { instrumentId };
+    resultWhere.instrumentVersion = { instrumentId };
+  }
+
+  // Scale + length come from the scoped instrument so the histogram bins and
+  // the "reached midway" threshold match the assessment being measured.
+  const scopedVersion = instrumentId
+    ? await prisma.instrumentVersion.findFirst({
+      where: { instrumentId, asCurrentOf: { isNot: null } },
+      select: { id: true },
+    })
+    : null;
+
+  let overallMax = 130;
+  let questionTotal = 25;
+  if (scopedVersion) {
+    const [bands, qCount] = await Promise.all([
+      prisma.overallBand.findMany({
+        where: { instrumentVersionId: scopedVersion.id },
+        select: { maxScore: true },
+      }),
+      prisma.question.count({
+        where: { section: { instrumentVersionId: scopedVersion.id } },
+      }),
+    ]);
+    if (bands.length > 0) overallMax = Math.max(...bands.map((b) => b.maxScore));
+    if (qCount > 0) questionTotal = qCount;
+  }
+  const midwayThreshold = Math.ceil(questionTotal / 2);
 
   const [sessions, results, coachingInterestCount] = await Promise.all([
     prisma.session.findMany({
@@ -67,7 +105,7 @@ export async function GET(req: NextRequest) {
   const completed = sessions.filter((s) => s.status === "completed").length;
   const inProgress = sessions.filter((s) => s.status === "in_progress").length;
   const abandoned = sessions.filter((s) => s.status === "abandoned").length;
-  const reachedMidway = sessions.filter((s) => s._count.answers >= 13).length;
+  const reachedMidway = sessions.filter((s) => s._count.answers >= midwayThreshold).length;
 
   const kpis = {
     totalCandidates: new Set(sessions.map((s) => s.userId)).size,
@@ -80,7 +118,8 @@ export async function GET(req: NextRequest) {
     p75Overall: percentile(overall, 0.75),
   };
 
-  const histogramOverall = histogram(overall, 0, 130, 10);
+  const binSize = Math.max(1, Math.round(overallMax / 12));
+  const histogramOverall = histogram(overall, 0, overallMax + binSize, binSize);
 
   const bands = {
     overall: tally(results.map((r) => r.overallBand)),
@@ -91,7 +130,7 @@ export async function GET(req: NextRequest) {
 
   const funnel = [
     { stage: "Started", count: sessions.length },
-    { stage: "Reached midway (≥13 answers)", count: reachedMidway },
+    { stage: `Reached midway (≥${midwayThreshold} answers)`, count: reachedMidway },
     { stage: "Completed", count: completed },
     { stage: "Coaching interest", count: coachingInterestCount },
   ];
@@ -111,6 +150,9 @@ export async function GET(req: NextRequest) {
     scope: {
       filtered: !!userIds,
       userIdsCount: userIds?.length ?? null,
+      instrumentId: instrumentId ?? null,
+      overallMax,
+      questionTotal,
       totals: { sessions: sessions.length, results: results.length, abandoned, inProgress },
     },
     kpis,

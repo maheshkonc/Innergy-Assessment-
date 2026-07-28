@@ -1,11 +1,19 @@
 import { prisma } from "@/db/client";
 import { DbStatusBanner } from "../DbStatusBanner";
 import { ScoreInput } from "./ScoreInput";
+import { resolveInstrumentScope } from "../instrument-scope";
+import { InstrumentSelect } from "../InstrumentSelect";
 
 export const dynamic = "force-dynamic";
 
-export default async function ScoringPage() {
-  const result = await loadData()
+export default async function ScoringPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ instrument?: string }>;
+}) {
+  const { instrument } = await searchParams;
+  const scope = await resolveInstrumentScope(instrument).catch(() => null);
+  const result = await loadData(scope?.selected?.currentVersionId ?? null)
     .then((data) => ({ ok: true as const, ...data }))
     .catch((err: unknown) => ({ ok: false as const, err }));
 
@@ -18,12 +26,17 @@ export default async function ScoringPage() {
     );
   }
 
-  const { sections, inProgressCount } = result;
+  const { sections, inProgressCount, bands } = result;
   const locked = false; // Restriction removed per user request
 
   return (
     <div>
       <h1 className="text-2xl font-semibold">Question scoring</h1>
+      <InstrumentSelect
+        options={scope?.options ?? []}
+        selectedId={scope?.selected?.id ?? null}
+        basePath="/admin/scoring"
+      />
       <p className="mt-2 text-sm text-slate-600">
         Scores you set here apply to assessments that start from now on. Past
         results stay pinned to the scores used at the time.
@@ -38,6 +51,39 @@ export default async function ScoringPage() {
             Note: Changes will apply immediately to people who are mid-assessment.
           </div>
         </div>
+      )}
+
+      {bands.length > 0 && (
+        <section className="mt-6 rounded-lg border border-slate-200 bg-white">
+          <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-900">Bands</h2>
+            <div className="text-xs text-slate-500">
+              Score ranges this assessment maps onto each band label.
+            </div>
+          </header>
+          <div className="grid gap-4 p-4 md:grid-cols-2">
+            {bands.map((group) => (
+              <div key={group.label}>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  {group.label}
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {group.rows.map((b, i) => (
+                    <li
+                      key={`${group.label}-${i}`}
+                      className="flex items-center justify-between rounded border border-slate-200 bg-slate-50/50 px-3 py-1.5 text-xs"
+                    >
+                      <span className="font-medium text-slate-800">{b.bandLabel}</span>
+                      <span className="font-mono text-slate-600">
+                        {b.minScore}–{b.maxScore}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <div className="mt-6 space-y-8">
@@ -88,39 +134,61 @@ export default async function ScoringPage() {
   );
 }
 
-async function loadData() {
-  const current = await prisma.instrument.findFirst({
+async function loadData(instrumentVersionId: string | null) {
+  if (!instrumentVersionId) {
+    return { sections: [], inProgressCount: 0, bands: [] };
+  }
+
+  const sectionRows = await prisma.section.findMany({
+    where: { instrumentVersionId },
+    orderBy: { displayOrder: "asc" },
     include: {
-      currentVersion: {
-        include: {
-          sections: {
-            orderBy: { displayOrder: "asc" },
-            include: {
-              dimension: true,
-              questions: {
-                orderBy: { displayOrder: "asc" },
-                include: { options: { orderBy: { displayOrder: "asc" } } },
-              },
-            },
-          },
-        },
+      dimension: true,
+      questions: {
+        orderBy: { displayOrder: "asc" },
+        include: { options: { orderBy: { displayOrder: "asc" } } },
       },
     },
   });
 
-  if (!current?.currentVersion) {
-    return { sections: [], inProgressCount: 0 };
-  }
+  const [dimensionBands, overallBands] = await Promise.all([
+    prisma.dimensionBand.findMany({
+      where: { instrumentVersionId },
+      orderBy: { minScore: "desc" },
+      include: { dimension: true },
+    }),
+    prisma.overallBand.findMany({
+      where: { instrumentVersionId },
+      orderBy: { minScore: "desc" },
+    }),
+  ]);
+
+  const bands = [
+    ...sectionRows.map((s) => ({
+      label: s.dimension.name,
+      rows: dimensionBands
+        .filter((b) => b.dimensionId === s.dimensionId)
+        .map((b) => ({ bandLabel: b.bandLabel, minScore: b.minScore, maxScore: b.maxScore })),
+    })),
+    {
+      label: "Overall",
+      rows: overallBands.map((b) => ({
+        bandLabel: b.bandLabel,
+        minScore: b.minScore,
+        maxScore: b.maxScore,
+      })),
+    },
+  ].filter((g) => g.rows.length > 0);
 
   const inProgressCount = await prisma.session.count({
     where: {
-      instrumentVersionId: current.currentVersion.id,
+      instrumentVersionId,
       status: "in_progress",
       lastMessageAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
     },
   });
 
-  const sections = current.currentVersion.sections.map((s) => ({
+  const sections = sectionRows.map((s) => ({
     id: s.id,
     displayOrder: s.displayOrder,
     dimensionName: s.dimension.name,
@@ -137,5 +205,5 @@ async function loadData() {
     })),
   }));
 
-  return { sections, inProgressCount };
+  return { sections, inProgressCount, bands };
 }

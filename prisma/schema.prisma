@@ -382,6 +382,8 @@ enum OptionLabel {
   B
   C
   D
+  // E is used only by 5-point Likert instruments (e.g. the team diagnostic).
+  E
 }
 
 enum VoiceMode {

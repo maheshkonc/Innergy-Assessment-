@@ -4,11 +4,19 @@ import { EditableField } from "./QuestionEditor";
 import { ReorderButtons } from "./ReorderButtons";
 import { FlowSettings } from "./FlowSettings";
 import { DEFAULT_CONTACT_POSITION } from "@/core/state-machine/engine";
+import { resolveInstrumentScope } from "../instrument-scope";
+import { InstrumentSelect } from "../InstrumentSelect";
 
 export const dynamic = "force-dynamic";
 
-export default async function QuestionsPage() {
-  const result = await loadData()
+export default async function QuestionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ instrument?: string }>;
+}) {
+  const { instrument } = await searchParams;
+  const scope = await resolveInstrumentScope(instrument).catch(() => null);
+  const result = await loadData(scope?.selected?.currentVersionId ?? null)
     .then((data) => ({ ok: true as const, ...data }))
     .catch((err: unknown) => ({ ok: false as const, err }));
 
@@ -27,6 +35,11 @@ export default async function QuestionsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold">Questions</h1>
+      <InstrumentSelect
+        options={scope?.options ?? []}
+        selectedId={scope?.selected?.id ?? null}
+        basePath="/admin/questions"
+      />
       <p className="mt-2 text-sm text-slate-600">
         Edit question text and option labels, and reorder sections and questions
         with the ↑ ↓ controls. Scores are edited under{" "}
@@ -116,25 +129,20 @@ export default async function QuestionsPage() {
   );
 }
 
-async function loadData() {
-  const current = await prisma.instrument.findFirst({
-    include: {
-      currentVersion: {
-        include: {
-          sections: {
-            orderBy: { displayOrder: "asc" },
-            include: {
-              dimension: true,
-              questions: {
-                orderBy: { displayOrder: "asc" },
-                include: { options: { orderBy: { displayOrder: "asc" } } },
-              },
-            },
-          },
+async function loadData(instrumentVersionId: string | null) {
+  const sectionRows = instrumentVersionId
+    ? await prisma.section.findMany({
+      where: { instrumentVersionId },
+      orderBy: { displayOrder: "asc" },
+      include: {
+        dimension: true,
+        questions: {
+          orderBy: { displayOrder: "asc" },
+          include: { options: { orderBy: { displayOrder: "asc" } } },
         },
       },
-    },
-  });
+    })
+    : [];
 
   const tenant = await prisma.tenant.findFirst({
     where: { status: "active" },
@@ -149,19 +157,19 @@ async function loadData() {
     if (flag?.value) contactPosition = flag.value;
   }
 
-  if (!current?.currentVersion) {
+  if (!instrumentVersionId) {
     return { sections: [], inProgressCount: 0, tenant, contactPosition };
   }
 
   const inProgressCount = await prisma.session.count({
     where: {
-      instrumentVersionId: current.currentVersion.id,
+      instrumentVersionId,
       status: "in_progress",
       lastMessageAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
     },
   });
 
-  const sections = current.currentVersion.sections.map((s) => ({
+  const sections = sectionRows.map((s) => ({
     id: s.id,
     displayOrder: s.displayOrder,
     dimensionName: s.dimension.name,

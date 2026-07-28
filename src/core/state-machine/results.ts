@@ -10,13 +10,19 @@ import type {
   OptionLabel,
 } from "../scoring/types";
 import { interpret, type InterpretResult } from "../interpretation/index";
-import { resolveMessageTemplate } from "../templates/resolve";
+import { getInstrumentCopy, resolveVariantTemplate } from "../templates/variant";
 import { renderTemplate } from "../templates/render";
 import type { LLMProvider } from "../../providers/llm/types";
 import type { OutboundAction } from "./engine";
 import { getContactPosition } from "./engine";
 import { enqueueUserReportNotification } from "../notifications/create";
 import { log } from "../logger";
+import {
+  DIMENSION_TAGS,
+  loadDimensionsByTag,
+  tagForStoredName,
+  type DimensionTag,
+} from "../dimensions";
 
 export async function finaliseResults(
   prisma: PrismaClient,
@@ -29,6 +35,7 @@ export async function finaliseResults(
 ): Promise<{ actions: OutboundAction[]; resultId: string; interpretation: InterpretResult }> {
   const { tenant, user, session } = args;
 
+  const copy = await getInstrumentCopy(prisma, session.instrumentVersionId);
   const spec = await loadInstrumentSpec(prisma, session.instrumentVersionId);
   const answers = await loadAnswerInputs(prisma, session.id);
   const score = scoreInstrument(spec, answers);
@@ -46,14 +53,13 @@ export async function finaliseResults(
     llm: args.llm,
   });
 
-  const dimensionRows = await prisma.dimension.findMany({
-    where: { id: { in: score.dimensions.map((d) => d.dimensionId) } },
-  });
-  const byName = new Map(dimensionRows.map((d) => [d.name, d]));
-
-  const cog = score.dimensions.find((d) => byName.get("Section 1")?.id === d.dimensionId)!;
-  const rel = score.dimensions.find((d) => byName.get("Section 2")?.id === d.dimensionId)!;
-  const inner = score.dimensions.find((d) => byName.get("Section 3")?.id === d.dimensionId)!;
+  // Keyed on internalTag — display names are editable content.
+  const dims = await loadDimensionsByTag(prisma);
+  const forTag = (tag: DimensionTag) =>
+    score.dimensions.find((d) => dims[tag]?.id === d.dimensionId)!;
+  const cog = forTag("cognitive");
+  const rel = forTag("relational");
+  const inner = forTag("inner");
 
   const result = await prisma.result.create({
     data: {
@@ -87,9 +93,10 @@ export async function finaliseResults(
   // Build outbound messages.
   const actions: OutboundAction[] = [];
   for (const d of interpretation.perDimension) {
-    const tpl = await resolveMessageTemplate(prisma, {
+    const tpl = await resolveVariantTemplate(prisma, {
       key: "dimension_result",
       tenantId: tenant.id,
+      variant: copy.variant,
     });
     if (!tpl) continue;
     const dimScore = score.dimensions.find((s) => s.dimensionId === d.dimensionId)!;
@@ -104,9 +111,10 @@ export async function finaliseResults(
     actions.push({ kind: "voice_if_enabled", body });
   }
 
-  const overallTpl = await resolveMessageTemplate(prisma, {
+  const overallTpl = await resolveVariantTemplate(prisma, {
     key: "overall_result",
     tenantId: tenant.id,
+    variant: copy.variant,
   });
   if (overallTpl) {
     const body = renderTemplate(overallTpl.body, {
@@ -138,8 +146,8 @@ export async function finaliseResults(
     coach_booking_url: coachJoin?.coach.bookingUrl ?? "",
     lowest_dimension_name: interpretation.lowestDimensionName,
   };
-  const cta1 = await resolveMessageTemplate(prisma, { key: "debrief_cta_1", tenantId: tenant.id });
-  const cta2 = await resolveMessageTemplate(prisma, { key: "debrief_cta_2", tenantId: tenant.id });
+  const cta1 = await resolveVariantTemplate(prisma, { key: "debrief_cta_1", tenantId: tenant.id, variant: copy.variant });
+  const cta2 = await resolveVariantTemplate(prisma, { key: "debrief_cta_2", tenantId: tenant.id, variant: copy.variant });
   if (cta1) {
     actions.push({
       kind: "text",
@@ -200,49 +208,57 @@ export async function resendLatestResults(
     overallNarrative?: string;
   };
 
-  const dimensionRows = await prisma.dimension.findMany();
-  const dimByName = new Map(dimensionRows.map((d) => [d.name, d]));
+  const dims = await loadDimensionsByTag(prisma);
 
   const actions: OutboundAction[] = [];
 
-  const dimTpl = await resolveMessageTemplate(prisma, {
+  // Pinned to the instrument the result was produced on, so a re-send of an
+  // older team result still renders team copy.
+  const copy = await getInstrumentCopy(prisma, result.instrumentVersionId);
+  const dimTpl = await resolveVariantTemplate(prisma, {
     key: "dimension_result",
     tenantId: tenant.id,
+    variant: copy.variant,
   });
-  const overallTpl = await resolveMessageTemplate(prisma, {
+  const overallTpl = await resolveVariantTemplate(prisma, {
     key: "overall_result",
     tenantId: tenant.id,
+    variant: copy.variant,
   });
 
-  const dimensionBandMaxByName: Record<string, { score: number; max: number; band: string }> = {
-    "Section 1": {
-      score: result.cognitiveScore,
-      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Section 1")?.id),
-      band: result.cognitiveBand,
-    },
-    "Section 2": {
-      score: result.relationalScore,
-      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Section 2")?.id),
-      band: result.relationalBand,
-    },
-    "Section 3": {
-      score: result.innerScore,
-      max: await maxForDimension(prisma, result.instrumentVersionId, dimByName.get("Section 3")?.id),
-      band: result.innerBand,
-    },
+  const scoreByTag: Record<DimensionTag, number> = {
+    cognitive: result.cognitiveScore,
+    relational: result.relationalScore,
+    inner: result.innerScore,
   };
+  const bandByTag: Record<DimensionTag, string> = {
+    cognitive: result.cognitiveBand,
+    relational: result.relationalBand,
+    inner: result.innerBand,
+  };
+  const stats: Record<DimensionTag, { score: number; max: number; band: string }> =
+    {} as Record<DimensionTag, { score: number; max: number; band: string }>;
+  for (const tag of DIMENSION_TAGS) {
+    stats[tag] = {
+      score: scoreByTag[tag],
+      max: await maxForDimension(prisma, result.instrumentVersionId, dims[tag]?.id),
+      band: bandByTag[tag],
+    };
+  }
 
   if (dimTpl && stored.perDimension) {
     for (const d of stored.perDimension) {
-      const stats = dimensionBandMaxByName[d.dimensionName];
-      if (!stats) continue;
+      // Results generated before the dimension rename stored "Section 1/2/3".
+      const tag = tagForStoredName(d.dimensionName, dims);
+      if (!tag) continue;
+      const s = stats[tag];
       const body = renderTemplate(
         dimTpl.body,
         {
-          dimension_name: d.dimensionName,
-          score: stats.score,
-          max_score: stats.max,
-          band_label: stats.band,
+          dimension_name: dims[tag]?.name ?? d.dimensionName,
+          score: s.score,
+          max_score: s.max,
+          band_label: s.band,
           interpretation: d.narrative,
         },
         { templateKey: "dimension_result" },
@@ -253,9 +269,9 @@ export async function resendLatestResults(
   }
 
   if (overallTpl) {
-    const cc = dimensionBandMaxByName["Section 1"]!;
-    const ri = dimensionBandMaxByName["Section 2"]!;
-    const im = dimensionBandMaxByName["Section 3"]!;
+    const cc = stats.cognitive;
+    const ri = stats.relational;
+    const im = stats.inner;
     const body = renderTemplate(
       overallTpl.body,
       {

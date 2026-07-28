@@ -1,6 +1,7 @@
-// Seeds baseline content: dimensions, the Innergy FLS v1 instrument (v1),
-// global message templates, the active LLM prompt, and one Innergy tenant
-// bound to the instrument. Idempotent — safe to rerun.
+// Seeds baseline content: dimensions, both instruments (the individual FLS
+// diagnostic and the team edition), global + team message templates, the active
+// LLM prompt, and one Innergy tenant bound to both instruments.
+// Idempotent — safe to rerun.
 
 import { prisma } from "../client";
 import {
@@ -15,14 +16,57 @@ import {
   SECTION_C_BANDS,
   OVERALL_BANDS,
 } from "./fixtures/innergy_fls_v1";
-import { GLOBAL_MESSAGE_TEMPLATES } from "./fixtures/message_templates";
+import {
+  TEAM_INSTRUMENT_ID,
+  TEAM_INSTRUMENT_VERSION_ID,
+  TEAM_TEMPLATE_VARIANT,
+  TEAM_V1_SECTIONS,
+  TEAM_QUESTION_COUNT,
+  TEAM_SECTION_A_BANDS,
+  TEAM_SECTION_B_BANDS,
+  TEAM_SECTION_C_BANDS,
+  TEAM_OVERALL_BANDS,
+} from "./fixtures/innergy_team_v1";
+import { GLOBAL_MESSAGE_TEMPLATES, type TemplateSeed } from "./fixtures/message_templates";
+import { TEAM_MESSAGE_TEMPLATES } from "./fixtures/team_message_templates";
 import { LLM_INTERPRETATION_PROMPT_V1 } from "./fixtures/llm_prompt";
+
+// Shape shared by both instrument fixtures — enough for the generic seeder.
+interface SeedSection {
+  id: string;
+  dimensionId: string;
+  displayOrder: number;
+  introTemplateKey: string;
+  questions: ReadonlyArray<{
+    id: string;
+    sectionId: string;
+    stem: string;
+    displayOrder: number;
+    internalTag?: string;
+    options: ReadonlyArray<{
+      label: string;
+      text: string;
+      score: number;
+      displayOrder: number;
+    }>;
+  }>;
+}
+
+interface SeedBand {
+  minScore: number;
+  maxScore: number;
+  bandLabel: string;
+  interpretationTemplate: string;
+  colorHex?: string;
+}
 
 async function seedDimensions() {
   const dimensions = [
-    { id: DIM_COGNITIVE, name: "Section 1", internalTag: "cognitive" },
-    { id: DIM_RELATIONAL, name: "Section 2", internalTag: "relational" },
-    { id: DIM_INNER, name: "Section 3", internalTag: "inner" },
+    // Display names — shown to users and admins. Code keys off internalTag
+    // (see core/dimensions.ts), never these strings.
+    { id: DIM_COGNITIVE, name: "Cognitive Clarity", internalTag: "cognitive" },
+    { id: DIM_RELATIONAL, name: "Relational Influence", internalTag: "relational" },
+    { id: DIM_INNER, name: "Inner Mastery", internalTag: "inner" },
   ];
   for (const d of dimensions) {
     await prisma.dimension.upsert({
@@ -34,40 +78,49 @@ async function seedDimensions() {
   console.log(`✓ seeded ${dimensions.length} dimensions`);
 }
 
-async function seedInstrument() {
+/**
+ * Seeds one instrument + version + its sections, questions, options and bands.
+ * Shared by the individual and team diagnostics — they differ only in content.
+ */
+async function seedInstrumentVersion(args: {
+  instrumentId: string;
+  instrumentVersionId: string;
+  name: string;
+  description: string;
+  metadata: Record<string, unknown>;
+  sections: ReadonlyArray<SeedSection>;
+  bands: ReadonlyArray<{ bands: ReadonlyArray<SeedBand>; dimensionId: string }>;
+  overallBands: ReadonlyArray<SeedBand>;
+  label: string;
+}) {
+  const { instrumentId, instrumentVersionId } = args;
+
   await prisma.instrument.upsert({
-    where: { id: INSTRUMENT_ID },
-    update: { name: "Innergy FLS", description: "Full-Spectrum Leadership diagnostic" },
-    create: {
-      id: INSTRUMENT_ID,
-      name: "Innergy FLS",
-      description: "Full-Spectrum Leadership diagnostic",
-    },
+    where: { id: instrumentId },
+    update: { name: args.name, description: args.description },
+    create: { id: instrumentId, name: args.name, description: args.description },
   });
 
   await prisma.instrumentVersion.upsert({
-    where: { id: INSTRUMENT_VERSION_ID },
-    update: {},
+    where: { id: instrumentVersionId },
+    update: { metadata: args.metadata as object },
     create: {
-      id: INSTRUMENT_VERSION_ID,
-      instrumentId: INSTRUMENT_ID,
+      id: instrumentVersionId,
+      instrumentId,
       versionNumber: 1,
       publishedAt: new Date(),
       publishedBy: "seed",
-      metadata: {
-        durationEstimate: "10–12 minutes",
-        dimensionOrder: [DIM_COGNITIVE, DIM_RELATIONAL, DIM_INNER],
-      },
+      metadata: args.metadata as object,
     },
   });
 
   // Mark this as the current version.
   await prisma.instrument.update({
-    where: { id: INSTRUMENT_ID },
-    data: { currentVersionId: INSTRUMENT_VERSION_ID },
+    where: { id: instrumentId },
+    data: { currentVersionId: instrumentVersionId },
   });
 
-  for (const section of INNERGY_V1_SECTIONS) {
+  for (const section of args.sections) {
     await prisma.section.upsert({
       where: { id: section.id },
       update: {
@@ -77,7 +130,7 @@ async function seedInstrument() {
       },
       create: {
         id: section.id,
-        instrumentVersionId: INSTRUMENT_VERSION_ID,
+        instrumentVersionId,
         dimensionId: section.dimensionId,
         displayOrder: section.displayOrder,
         introTemplateKey: section.introTemplateKey,
@@ -105,7 +158,7 @@ async function seedInstrument() {
           create: {
             id: optId,
             questionId: q.id,
-            label: o.label,
+            label: o.label as "A" | "B" | "C" | "D" | "E",
             text: o.text,
             score: o.score,
             displayOrder: o.displayOrder,
@@ -116,23 +169,14 @@ async function seedInstrument() {
   }
 
   // Clear + reseed bands (cheap; always 3 × 4 + 1 × 4 rows).
-  await prisma.dimensionBand.deleteMany({
-    where: { instrumentVersionId: INSTRUMENT_VERSION_ID },
-  });
-  await prisma.overallBand.deleteMany({
-    where: { instrumentVersionId: INSTRUMENT_VERSION_ID },
-  });
+  await prisma.dimensionBand.deleteMany({ where: { instrumentVersionId } });
+  await prisma.overallBand.deleteMany({ where: { instrumentVersionId } });
 
-  const sectionBands = [
-    { bands: SECTION_A_BANDS, dimensionId: DIM_COGNITIVE },
-    { bands: SECTION_B_BANDS, dimensionId: DIM_RELATIONAL },
-    { bands: SECTION_C_BANDS, dimensionId: DIM_INNER },
-  ];
-  for (const group of sectionBands) {
+  for (const group of args.bands) {
     for (const b of group.bands) {
       await prisma.dimensionBand.create({
         data: {
-          instrumentVersionId: INSTRUMENT_VERSION_ID,
+          instrumentVersionId,
           dimensionId: group.dimensionId,
           minScore: b.minScore,
           maxScore: b.maxScore,
@@ -143,10 +187,10 @@ async function seedInstrument() {
       });
     }
   }
-  for (const b of OVERALL_BANDS) {
+  for (const b of args.overallBands) {
     await prisma.overallBand.create({
       data: {
-        instrumentVersionId: INSTRUMENT_VERSION_ID,
+        instrumentVersionId,
         minScore: b.minScore,
         maxScore: b.maxScore,
         bandLabel: b.bandLabel,
@@ -154,11 +198,61 @@ async function seedInstrument() {
       },
     });
   }
-  console.log("✓ seeded Innergy FLS v1 (25 questions + bands)");
+  console.log(`✓ seeded ${args.label}`);
+}
+
+// Individual diagnostic — the original instrument (25 Qs, A–D, max 123).
+async function seedIndividualInstrument() {
+  await seedInstrumentVersion({
+    instrumentId: INSTRUMENT_ID,
+    instrumentVersionId: INSTRUMENT_VERSION_ID,
+    name: "Innergy FLS",
+    description: "Full-Spectrum Leadership diagnostic",
+    metadata: {
+      audience: "individual",
+      durationEstimate: "10–12 minutes",
+      questionCount: 25,
+      dimensionOrder: [DIM_COGNITIVE, DIM_RELATIONAL, DIM_INNER],
+    },
+    sections: INNERGY_V1_SECTIONS as unknown as ReadonlyArray<SeedSection>,
+    bands: [
+      { bands: SECTION_A_BANDS, dimensionId: DIM_COGNITIVE },
+      { bands: SECTION_B_BANDS, dimensionId: DIM_RELATIONAL },
+      { bands: SECTION_C_BANDS, dimensionId: DIM_INNER },
+    ],
+    overallBands: OVERALL_BANDS,
+    label: "Innergy FLS v1 (25 questions + bands)",
+  });
+}
+
+// Team diagnostic — 15 Likert statements scored 1–5, max 75.
+async function seedTeamInstrument() {
+  await seedInstrumentVersion({
+    instrumentId: TEAM_INSTRUMENT_ID,
+    instrumentVersionId: TEAM_INSTRUMENT_VERSION_ID,
+    name: "Innergy FLS — Team",
+    description: "Full Spectrum Leadership Diagnostic for teams",
+    metadata: {
+      audience: "team",
+      templateVariant: TEAM_TEMPLATE_VARIANT,
+      durationEstimate: "7 minutes",
+      questionCount: TEAM_QUESTION_COUNT,
+      dimensionOrder: [DIM_COGNITIVE, DIM_RELATIONAL, DIM_INNER],
+    },
+    sections: TEAM_V1_SECTIONS as unknown as ReadonlyArray<SeedSection>,
+    bands: [
+      { bands: TEAM_SECTION_A_BANDS, dimensionId: DIM_COGNITIVE },
+      { bands: TEAM_SECTION_B_BANDS, dimensionId: DIM_RELATIONAL },
+      { bands: TEAM_SECTION_C_BANDS, dimensionId: DIM_INNER },
+    ],
+    overallBands: TEAM_OVERALL_BANDS,
+    label: `Innergy FLS Team v1 (${TEAM_QUESTION_COUNT} questions + bands)`,
+  });
 }
 
 async function seedMessageTemplates() {
-  for (const t of GLOBAL_MESSAGE_TEMPLATES) {
+  const all: TemplateSeed[] = [...GLOBAL_MESSAGE_TEMPLATES, ...TEAM_MESSAGE_TEMPLATES];
+  for (const t of all) {
     // Global default: tenantId null. Upsert via a compound unique (key, tenantId, locale).
     const existing = await prisma.messageTemplate.findFirst({
       where: { key: t.key, tenantId: null, locale: "en" },
@@ -174,7 +268,9 @@ async function seedMessageTemplates() {
       });
     }
   }
-  console.log(`✓ seeded ${GLOBAL_MESSAGE_TEMPLATES.length} global message templates`);
+  console.log(
+    `✓ seeded ${GLOBAL_MESSAGE_TEMPLATES.length} global + ${TEAM_MESSAGE_TEMPLATES.length} team message templates`,
+  );
 }
 
 async function seedLlmPrompt() {
@@ -227,16 +323,19 @@ async function seedInnergyTenant() {
     create: { tenantId: tenant.id, coachId: coach.id, isPrimary: true },
   });
 
-  await prisma.tenantInstrument.upsert({
-    where: {
-      tenantId_instrumentVersionId: {
-        tenantId: tenant.id,
-        instrumentVersionId: INSTRUMENT_VERSION_ID,
+  // The tenant offers both diagnostics; /take lets the visitor pick which.
+  for (const versionId of [INSTRUMENT_VERSION_ID, TEAM_INSTRUMENT_VERSION_ID]) {
+    await prisma.tenantInstrument.upsert({
+      where: {
+        tenantId_instrumentVersionId: {
+          tenantId: tenant.id,
+          instrumentVersionId: versionId,
+        },
       },
-    },
-    update: {},
-    create: { tenantId: tenant.id, instrumentVersionId: INSTRUMENT_VERSION_ID },
-  });
+      update: {},
+      create: { tenantId: tenant.id, instrumentVersionId: versionId },
+    });
+  }
 
   // Feature flags (see CLAUDE.md §V1 seed content).
   const flags: Array<[string, string]> = [
@@ -261,7 +360,8 @@ async function seedInnergyTenant() {
 
 async function main() {
   await seedDimensions();
-  await seedInstrument();
+  await seedIndividualInstrument();
+  await seedTeamInstrument();
   await seedMessageTemplates();
   await seedLlmPrompt();
   await seedInnergyTenant();

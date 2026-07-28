@@ -14,6 +14,7 @@ import { WhisperProvider } from "@/providers/stt/whisper";
 import { ElevenLabsProvider } from "@/providers/tts/elevenlabs";
 import { resolveMessageTemplate } from "@/core/templates/resolve";
 import { renderTemplate } from "@/core/templates/render";
+import { DIMENSION_TAGS, loadDimensionsByTag } from "@/core/dimensions";
 import { log } from "@/core/logger";
 
 // In-memory dedup of already-processed provider message ids. MSG91 in
@@ -262,11 +263,13 @@ async function sendWelcomeSequence(
     where: { tenantId: tenant.id, isPrimary: true },
     include: { coach: true },
   });
+  const dims = await loadDimensionsByTag(db);
+  const dimensionNamesList = DIMENSION_TAGS.map((t) => dims[t]?.name).filter(Boolean).join(", ");
   const vars = {
     name_or_there: "there",
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
-    dimension_names_list: "Section 1, Section 2, Section 3",
+    dimension_names_list: dimensionNamesList,
     duration_estimate: "10–12 minutes",
     question_count: 25,
   };

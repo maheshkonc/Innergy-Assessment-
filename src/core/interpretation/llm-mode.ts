@@ -42,6 +42,12 @@ export async function interpretWithLlm(
     where: { id: { in: score.dimensions.map((d) => d.dimensionId) } },
   });
   const nameById = new Map(dims.map((d) => [d.id, d.name]));
+  // Prompt variables are addressed by internalTag; display names are content.
+  const nameByTag = (tag: string) =>
+    dims.find((d) => d.internalTag === tag)?.name ?? "";
+  const COGNITIVE = nameByTag("cognitive");
+  const RELATIONAL = nameByTag("relational");
+  const INNER = nameByTag("inner");
 
   const prompt = renderTemplate(
     activePrompt.body,
@@ -50,15 +56,15 @@ export async function interpretWithLlm(
       organisation: user.organisation ?? "",
       instrument_name: args.instrumentName,
       instrument_version: "1",
-      cognitive_score: findDimScore(score, "Section 1", nameById),
-      cognitive_max: findDimMax(score, "Section 1", nameById),
-      cognitive_band: findDimBand(score, "Section 1", nameById),
-      relational_score: findDimScore(score, "Section 2", nameById),
-      relational_max: findDimMax(score, "Section 2", nameById),
-      relational_band: findDimBand(score, "Section 2", nameById),
-      inner_score: findDimScore(score, "Section 3", nameById),
-      inner_max: findDimMax(score, "Section 3", nameById),
-      inner_band: findDimBand(score, "Section 3", nameById),
+      cognitive_score: findDimScore(score, COGNITIVE, nameById),
+      cognitive_max: findDimMax(score, COGNITIVE, nameById),
+      cognitive_band: findDimBand(score, COGNITIVE, nameById),
+      relational_score: findDimScore(score, RELATIONAL, nameById),
+      relational_max: findDimMax(score, RELATIONAL, nameById),
+      relational_band: findDimBand(score, RELATIONAL, nameById),
+      inner_score: findDimScore(score, INNER, nameById),
+      inner_max: findDimMax(score, INNER, nameById),
+      inner_band: findDimBand(score, INNER, nameById),
       overall_score: score.overallScore,
       overall_max: score.overallMaxScore,
       overall_band: score.overallBand,

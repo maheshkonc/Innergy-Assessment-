@@ -2,10 +2,22 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
+import {
+  parseDimensionResult,
+  parseOverallResult,
+  type DimensionResult,
+  type OverallResult,
+} from "./result-parse";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 type WebAction = { kind: "text"; body: string } | { kind: "image"; imageUrl: string };
+
+// A–D on the individual diagnostic; A–E on the team diagnostic's 1–5 scale.
+type OptionLabel = "A" | "B" | "C" | "D" | "E";
+
+/** Which diagnostic the visitor chose on the /take chooser. */
+export type Audience = "individual" | "team";
 
 type Widget =
   | { kind: "welcome" }
@@ -16,7 +28,7 @@ type Widget =
     total: number;
     sectionName: string;
     stem: string;
-    options: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
+    options: Array<{ label: OptionLabel; text: string }>;
   }
   | { kind: "yes_no"; context: "debrief_cta" | "coaching_interest" }
   | {
@@ -48,7 +60,7 @@ type Bubble =
     questionNumber: number;
     total: number;
     stem: string;
-    optionLabel: "A" | "B" | "C" | "D";
+    optionLabel: OptionLabel;
     optionText: string;
   })
   | (BubbleBase & {
@@ -75,7 +87,13 @@ const BETWEEN_BUBBLES_MS = 450;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
+export function AssessmentChat({
+  tenantSlug,
+  audience = "individual",
+}: {
+  tenantSlug?: string;
+  audience?: Audience;
+}) {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [widget, setWidget] = useState<Widget | null>(null);
   const [state, setState] = useState<string>("loading");
@@ -112,7 +130,7 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
         const res = await fetch("/api/web/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, tenantSlug, reset: opts?.reset }),
+          body: JSON.stringify({ text, tenantSlug, audience, reset: opts?.reset }),
         });
         if (!res.ok) {
           const { error: err } = await res.json().catch(() => ({ error: "request failed" }));
@@ -159,7 +177,7 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
         setBusy(false);
       }
     },
-    [tenantSlug],
+    [tenantSlug, audience],
   );
 
   const handleRestart = useCallback(() => {
@@ -167,9 +185,18 @@ export function AssessmentChat({ tenantSlug }: { tenantSlug?: string }) {
     void send(undefined, undefined, { reset: true });
   }, [send]);
 
+  // Bootstrap exactly once per assessment. Without the guard, StrictMode's
+  // double-invoked mount effect fires two bootstrap calls on a client-side
+  // navigation (arriving from the /take chooser), and the second one takes the
+  // resume path — re-emitting the whole welcome sequence into the thread.
+  // Keyed so that genuinely switching tenant or audience does re-bootstrap.
+  const bootstrappedFor = useRef<string | null>(null);
   useEffect(() => {
+    const key = `${tenantSlug ?? ""}|${audience}`;
+    if (bootstrappedFor.current === key) return;
+    bootstrappedFor.current = key;
     void send();
-  }, [send]);
+  }, [send, tenantSlug, audience]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -395,7 +422,7 @@ function BubbleView({
         <Avatar who="bot" />
         <div className="flex max-w-[85%] flex-col items-start gap-1">
           <div className="w-full min-w-[300px] overflow-hidden rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm">
-            <AssessmentDonutChart dimensions={bubble.dimensions} />
+            <AssessmentSpiderChart dimensions={bubble.dimensions} />
           </div>
           <span className="text-[10px] text-[#8A7868]">{time}</span>
         </div>
@@ -445,112 +472,6 @@ function BubbleView({
   );
 }
 
-// ─── Result-message parsers + cards ──────────────────────────────────────
-// The bot emits `dimension_result` + `overall_result` as plain template text
-// (so WhatsApp gets readable markdown-style `*bold*`). On the web we detect
-// that shape and render a richer card instead of the raw string.
-
-type DimensionResult = { title: string; score: string; max: string; band: string; body: string };
-
-function parseDimensionResult(text: string): DimensionResult | null {
-  const lines = text.split("\n").map((l) => l.trim());
-  const header = lines[0];
-  if (!header) return null;
-
-  // New format: *Title* — Score / Max · Band
-  const headerMatch = header.match(/^\*(.+)\*\s*[—\-]\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*·\s*(.+)$/);
-  if (headerMatch) {
-    const title = headerMatch[1]!.trim();
-    const score = headerMatch[2]!;
-    const max = headerMatch[3]!;
-    const band = headerMatch[4]!.trim();
-    const body = lines.slice(1).join("\n").trim();
-    return { title, score, max, band, body };
-  }
-
-  // Fallback to old format if needed
-  const title = header.match(/^\*(.+)\*$/)?.[1];
-  if (!title) return null;
-  const scoreLine = lines.find((l) => /^Your score:/i.test(l));
-  const bandLine = lines.find((l) => /^Band:/i.test(l));
-  if (!scoreLine || !bandLine) return null;
-  const m = scoreLine.match(/Your score:\s*(\S+)\s*\/\s*(\S+)/i);
-  if (!m) return null;
-  const band = bandLine.replace(/^Band:\s*/i, "").trim();
-  const startIdx = lines.indexOf(bandLine) + 1;
-  const body = lines.slice(startIdx).join("\n").trim();
-  return { title, score: m[1]!, max: m[2]!, band, body };
-}
-
-type OverallResult = {
-  title: string;
-  sections: Array<{ label: string; score: string; max: string }>;
-  overallScore?: string;
-  overallMax?: string;
-  bandLabel?: string;
-  body: string;
-  dimensions?: Array<{ name: string; score: number; maxScore: number; band: string }>;
-};
-
-function parseOverallResult(text: string): OverallResult | null {
-  const lines = text.split("\n").map((l) => l.trim());
-  const header = lines[0];
-  if (!header) return null;
-
-  // Title is usually *BOLD*
-  const titleMatch = header.match(/^\*(.+)\*$/);
-  if (!titleMatch) return null;
-  const title = titleMatch[1]!.trim();
-
-  const sections: OverallResult["sections"] = [];
-  let overallScore: string | undefined;
-  let overallMax: string | undefined;
-  let bandLabel: string | undefined;
-  const interpretationLines: string[] = [];
-  let seenAll = false;
-
-  for (const line of lines.slice(1)) {
-    if (!line) continue;
-
-    // Matches "Section 1: 10 / 20" or "Section 1 — 10 / 20"
-    const secMatch = line.match(/^(Section\s+\d+)\s*[:—\-]\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
-    // Matches "OVERALL: 10 / 20" or "Total: 10 / 20"
-    const overallMatch = line.match(/^(?:OVERALL|Total)\s*[:—\-]\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
-    // Matches "Readiness Level: XYZ" or "Band: XYZ"
-    const bandMatch = line.match(/^(?:Readiness Level|Band)\s*[:—\-]\s*(.+)/i);
-
-    if (secMatch) {
-      sections.push({ label: secMatch[1]!, score: secMatch[2]!, max: secMatch[3]! });
-    } else if (overallMatch) {
-      overallScore = overallMatch[1];
-      overallMax = overallMatch[2];
-      seenAll = true;
-    } else if (bandMatch) {
-      bandLabel = bandMatch[1]!.trim();
-      seenAll = true;
-    } else if (seenAll) {
-      interpretationLines.push(line);
-    }
-  }
-
-  if (sections.length === 0 && !overallScore) return null;
-
-  return {
-    title,
-    sections,
-    overallScore,
-    overallMax,
-    bandLabel,
-    body: interpretationLines.join("\n").trim(),
-    dimensions: sections.map((s) => ({
-      name: s.label,
-      score: parseFloat(s.score),
-      maxScore: parseFloat(s.max),
-      band: "", // Not used in small chart
-    })),
-  };
-}
-
 function DimensionResultCard({ title, score, max, band, body }: DimensionResult) {
   return (
     <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
@@ -598,7 +519,7 @@ function OverallResultCard({
         {/* Real Interactive ApexChart in the Bubble! */}
         {dimensions && dimensions.length > 0 && (
           <div className="mt-4 -mb-4 bg-white/50 rounded-xl py-2">
-            <AssessmentDonutChart dimensions={dimensions} />
+            <AssessmentSpiderChart dimensions={dimensions} />
           </div>
         )}
 
@@ -847,7 +768,9 @@ function QuestionWidget({
   busy: boolean;
   onSubmit: (text?: string, userEcho?: string | BubbleInput) => void | Promise<void>;
 }) {
-  const [selected, setSelected] = useState<"A" | "B" | "C" | "D" | null>(null);
+  const [selected, setSelected] = useState<OptionLabel | null>(null);
+  // The 5-point instrument presents its scale as 1–5, not A–E.
+  const isLikert = widget.options.length === 5;
 
   // Reset selection when the question changes.
   useEffect(() => {
@@ -865,8 +788,9 @@ function QuestionWidget({
         </h3>
       </div>
       <div className="space-y-2">
-        {widget.options.map((o) => {
+        {widget.options.map((o, i) => {
           const isSelected = selected === o.label;
+          const badge = isLikert ? String(i + 1) : o.label;
           return (
             <button
               key={o.label}
@@ -887,7 +811,7 @@ function QuestionWidget({
                     : "border-[var(--container-light)] bg-white text-[var(--foreground)] group-hover:border-[var(--foreground)]/50")
                 }
               >
-                {o.label}
+                {badge}
               </span>
               <span className="leading-relaxed">{o.text}</span>
             </button>
@@ -946,98 +870,114 @@ function YesNoWidget({
 }
 
 
-function AssessmentDonutChart({
+function AssessmentSpiderChart({
   dimensions,
 }: {
   dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
 }) {
-  const series = dimensions.map((d) => d.score);
+  // Plotted as % of each dimension's own maximum, not raw score. The three
+  // dimensions have different maxima (25/30/20 on the team instrument,
+  // 38/45/40 on the individual one), so raw values would make a weaker
+  // dimension look stronger purely because its scale is longer. The tooltip
+  // still shows the real score.
+  const pct = dimensions.map((d) =>
+    d.maxScore > 0 ? Math.round((d.score / d.maxScore) * 1000) / 10 : 0,
+  );
   const labels = dimensions.map((d) => d.name);
-
-  // Map to brand colors
-  // Section 1: Dark Brown, Section 2: Pink, Section 3: Yellow
-  const colors = ["#36211B", "#FF3F64", "#FFDE59"];
 
   const options: any = {
     chart: {
-      type: "donut",
+      type: "radar",
+      height: 300,
       fontFamily: "Montserrat, sans-serif",
       toolbar: { show: false },
+      dropShadow: { enabled: false },
+      // Apex reserves vertical space for a legend/title we don't use.
+      parentHeightOffset: 0,
+      offsetY: -10,
     },
-    colors: colors,
-    labels: labels,
-    stroke: {
-      show: true,
-      colors: ["var(--background)"],
-      width: 4,
+    colors: ["#FF3F64"],
+    labels,
+    xaxis: {
+      // Wrapped to one word per line. "Relational Influence" on a single line
+      // overruns the container on a 390px phone; ApexCharts renders an array
+      // of strings as stacked lines.
+      categories: labels.map((l) => l.split(" ")),
+      labels: {
+        style: {
+          colors: labels.map(() => "#36211B"),
+          fontSize: "10px",
+          fontWeight: 600,
+          fontFamily: "Montserrat, sans-serif",
+        },
+      },
+    },
+    yaxis: { show: false, min: 0, max: 100, tickAmount: 4 },
+    plotOptions: {
+      radar: {
+        // Deliberately small relative to the container: the vertex labels sit
+        // OUTSIDE the polygon. See the `responsive` block for phone sizing.
+        size: 104,
+        polygons: {
+          strokeColors: "#E7DFD5",
+          connectorColors: "#E7DFD5",
+          fill: { colors: ["#FFFFFF", "#FDFAF5"] },
+        },
+      },
+    },
+    // Gutters for the vertex labels.
+    grid: { padding: { left: 30, right: 30, top: 0, bottom: 10 } },
+    fill: { opacity: 0.25, colors: ["#FF3F64"] },
+    stroke: { show: true, width: 2, colors: ["#FF3F64"] },
+    markers: {
+      size: 5,
+      colors: ["#FFFFFF"],
+      strokeColors: "#FF3F64",
+      strokeWidth: 2,
     },
     dataLabels: {
       enabled: true,
+      formatter: (val: number) => `${val}%`,
+      background: {
+        enabled: true,
+        borderRadius: 4,
+        borderWidth: 0,
+        foreColor: "#36211B",
+        opacity: 0.9,
+      },
       style: {
-        fontSize: "12px",
+        fontSize: "10px",
+        fontWeight: 700,
         fontFamily: "Montserrat, sans-serif",
-        fontWeight: "700",
       },
-      dropShadow: { enabled: false },
-    },
-    plotOptions: {
-      pie: {
-        expandOnClick: false,
-        donut: {
-          size: "70%",
-          background: "transparent",
-          labels: {
-            show: true,
-            name: {
-              show: true,
-              fontSize: "10px",
-              fontWeight: 600,
-              color: "#8A7868",
-              offsetY: -8,
-            },
-            value: {
-              show: true,
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "#36211B",
-              offsetY: 8,
-              formatter: () => "REPORT",
-            },
-            total: {
-              show: true,
-              showAlways: true,
-              label: "INNERGY",
-              color: "#36211B",
-              fontSize: "9px",
-              fontWeight: 600,
-              formatter: () => "REPORT",
-            },
-          },
-        },
-      },
-    },
-    legend: {
-      position: "bottom",
-      fontSize: "11px",
-      fontWeight: 500,
-      fontFamily: "Montserrat, sans-serif",
-      markers: { radius: 12 },
-      itemMargin: { horizontal: 8, vertical: 4 },
     },
     tooltip: {
       y: {
-        formatter: (val: number, { seriesIndex }: any) => {
-          const dim = dimensions[seriesIndex];
-          if (!dim) return `${val}`;
-          return `${val} / ${dim.maxScore}`;
+        formatter: (val: number, { dataPointIndex }: any) => {
+          const dim = dimensions[dataPointIndex];
+          if (!dim) return `${val}%`;
+          return `${dim.score} / ${dim.maxScore}${dim.band ? ` · ${dim.band}` : ""}`;
         },
       },
     },
+    legend: { show: false },
+    responsive: [
+      {
+        breakpoint: 480,
+        options: {
+          chart: { height: 260 },
+          plotOptions: { radar: { size: 74 } },
+          grid: { padding: { left: 18, right: 18, top: 0, bottom: 8 } },
+          xaxis: { labels: { style: { fontSize: "9px" } } },
+          dataLabels: { style: { fontSize: "9px" } },
+        },
+      },
+    ],
   };
 
   return (
     <div className="mx-auto w-full max-w-sm py-2">
-      <div className="mb-4 flex flex-col items-center">
+      <div className="mb-2 flex flex-col items-center">
         <div className="relative mb-4 flex h-[40px] w-full items-center justify-center overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -1050,9 +990,28 @@ function AssessmentDonutChart({
           Full Spectrum Leadership
         </p>
       </div>
-      <div className="min-h-[280px]">
-        <ReactApexChart options={options} series={series} type="donut" width="100%" />
+      <div>
+        <ReactApexChart
+          options={options}
+          series={[{ name: "Score", data: pct }]}
+          type="radar"
+          width="100%"
+        />
       </div>
+      {/* Raw scores under the web, so the % on the chart is always traceable. */}
+      <ul className="mt-1 space-y-1">
+        {dimensions.map((d) => (
+          <li
+            key={d.name}
+            className="flex items-center justify-between text-xs text-[var(--foreground)]"
+          >
+            <span className="opacity-75">{d.name}</span>
+            <span className="font-mono font-semibold">
+              {d.score} / {d.maxScore}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -1061,7 +1020,7 @@ function ResultsWidget({ widget }: { widget: Extract<Widget, { kind: "results" }
   return (
     <div className="flex flex-col gap-4 py-2 innergy-bubble-in">
       <div className="rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]/20">
-        <AssessmentDonutChart dimensions={widget.dimensions} />
+        <AssessmentSpiderChart dimensions={widget.dimensions} />
       </div>
 
       <div className="rounded-xl bg-[var(--foreground)] p-4 text-white shadow-sm">
