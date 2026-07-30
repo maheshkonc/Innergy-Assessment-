@@ -16,14 +16,14 @@ export const TEAM_MESSAGE_TEMPLATES: TemplateSeed[] = [
   {
     key: "team_welcome_1",
     body:
-      "Hi {{name_or_there}} — welcome to the Full Spectrum Leadership Diagnostic for teams, from {{tenant_name}}.\n\n" +
-      "This gives you an instant picture of where your leadership team is strong — and where they are at risk — across the three dimensions that decide whether a team can lead in the AI age.",
+      "Hi {{name_or_there}} — welcome to the Full Spectrum Leadership Diagnostic for teams, from {{tenant_name}}.",
   },
   {
     key: "team_welcome_2",
     body:
       "3 dimensions | {{question_count}} questions | {{duration_estimate}}. You'll get your readout at the end and in your email.\n\n" +
-      "Instruction: think about your top 10–20 leaders as a group. For each statement, score how true it is for that group. There are no right answers — only the ones that reflect accurately.",
+      "Instruction: think about your top 10–20 leaders as a group. For each statement, score how true it is for that group. There are no right answers — only the ones that reflect accurately.\n\n" +
+      "1 rarely true · 2 true of some · 3 hit or miss · 4 mostly true · 5 consistently true",
   },
   {
     key: "team_welcome_3",
@@ -31,6 +31,8 @@ export const TEAM_MESSAGE_TEMPLATES: TemplateSeed[] = [
   },
 
   // --- Section intros ---
+  // No longer emitted — see the note in message_templates.ts. The 1–5 scale
+  // legend that used to live in the Cognitive intro now sits in team_welcome_2.
   {
     key: "team_section_intro_cognitive",
     body:

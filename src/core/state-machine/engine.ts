@@ -140,21 +140,18 @@ async function handleWelcome(
   return startDiagnostic(prisma, input, actions);
 }
 
-// Sends the first section intro + first question, advancing to the question
-// state. Shared by the welcome handler (start of flow).
+// Sends the first question, advancing to the question state. Shared by the
+// welcome handler (start of flow).
+//
+// Section intros are deliberately not emitted — here or on section change.
+// The diagnostic runs as one continuous run of questions so there are no
+// breaks in the middle; how to answer is covered once, in the welcome copy,
+// and each question already names its own section.
 async function startDiagnostic(
   prisma: PrismaClient,
   input: FlowInput,
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
-  const firstSection = await prisma.section.findFirst({
-    where: { instrumentVersionId: input.session.instrumentVersionId, displayOrder: 1 },
-  });
-  if (firstSection) {
-    const intro = await render(prisma, firstSection.introTemplateKey, input, {});
-    actions.push({ kind: "text", body: intro });
-    actions.push({ kind: "voice_if_enabled", body: intro });
-  }
   await enqueueQuestion(prisma, input, 1, actions);
   return { actions, newContext: { state: "question", currentQuestionIndex: 1 } };
 }
@@ -318,15 +315,6 @@ async function handleQuestion(
   const isLast = idx === questions.length;
   if (!isLast) {
     const nextIdx = idx + 1;
-    const next = questions[nextIdx - 1]!;
-    if (next.sectionId !== q.sectionId) {
-      const section = await prisma.section.findUnique({ where: { id: next.sectionId } });
-      if (section) {
-        const intro = await render(prisma, section.introTemplateKey, input, {});
-        actions.push({ kind: "text", body: intro });
-        actions.push({ kind: "voice_if_enabled", body: intro });
-      }
-    }
     await enqueueQuestion(prisma, input, nextIdx, actions);
     return { actions, newContext: { ...ctx, state: "question", currentQuestionIndex: nextIdx } };
   }

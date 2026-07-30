@@ -44,13 +44,6 @@ type Widget =
     options: Array<{ label: "A" | "B" | "C" | "D" | "E"; text: string }>;
   }
   | { kind: "yes_no"; context: "debrief_cta" | "coaching_interest" }
-  | {
-    kind: "results";
-    resultId: string;
-    imageUrl: string;
-    overall: { score: number; maxScore: number; band: string };
-    dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
-  }
   | { kind: "closed"; message: string }
   | { kind: "unsupported"; state: string };
 
@@ -309,29 +302,10 @@ async function renderResumeActions(
       await pushTemplate("ask_email", { name: user.firstName ?? "" });
       break;
 
-    case "question": {
-      const idx = ctx.currentQuestionIndex ?? 1;
-      const questions = await prisma.section.findMany({
-        where: { instrumentVersionId: session.instrumentVersionId },
-        orderBy: { displayOrder: "asc" },
-        include: {
-          dimension: true,
-          questions: { orderBy: { displayOrder: "asc" } },
-        },
-      });
-      const flat = questions.flatMap((s) => s.questions.map((q) => ({ q, sectionKey: s.introTemplateKey, sectionId: s.id })));
-      const target = flat[idx - 1];
-      if (target) {
-        // If they're at the first question of a section, show the section intro.
-        const atSectionStart =
-          idx === 1 ||
-          (flat[idx - 2] && flat[idx - 2]!.sectionId !== target.sectionId);
-        if (atSectionStart) {
-          await pushTemplate(target.sectionKey);
-        }
-      }
+    case "question":
+      // Nothing to re-emit: the flow no longer announces sections, and the
+      // question itself is rendered by the widget.
       break;
-    }
 
     case "debrief_cta": {
       const res = await prisma.result.findFirst({
@@ -378,7 +352,10 @@ async function buildBaseVars(
     tenant_name: tenant.name,
     coach_name: coachJoin?.coach.name ?? "",
     coach_booking_url: coachJoin?.coach.bookingUrl ?? "",
-    coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? "",
+    // Same fallback chain as the FSM's own render path (engine.buildBaseVars),
+    // so a resumed session doesn't render an empty LinkedIn line where a live
+    // one would have shown the tenant's URL.
+    coach_linkedin_url: coachJoin?.coach.linkedinUrl ?? tenant.linkedinUrl ?? "",
     name_or_there: "there",
     duration_estimate: copy.durationEstimate,
     dimension_names_list: dimensionNamesList,
@@ -466,36 +443,17 @@ async function buildWidget(
 
     case "closed":
     case "results": {
+      // The readout has already gone out as chat messages by this point.
+      // Rendering it again as a panel repeated the entire results section at
+      // the end of the thread, so all that belongs here is the re-send
+      // affordance (PRD §11.10 — the RESULTS command).
       const res = await db.result.findFirst({
         where: { tenantId: tenant.id, userId: user.id },
         orderBy: { generatedAt: "desc" },
       });
-      if (!res) return { kind: "closed", message: "Session ended." };
-      const bands = await db.dimensionBand.findMany({
-        where: { instrumentVersionId: res.instrumentVersionId },
-        include: { dimension: true },
-      });
-      const dims = await loadDimensionsByTag(db);
-      const maxFor = (dimensionId: string | undefined) =>
-        bands.filter((b) => b.dimensionId === dimensionId).reduce((m, b) => Math.max(m, b.maxScore), 0);
-      const ccMax = maxFor(dims.cognitive?.id);
-      const riMax = maxFor(dims.relational?.id);
-      const imMax = maxFor(dims.inner?.id);
-      return {
-        kind: "results",
-        resultId: res.id,
-        imageUrl: `/api/image/result/${res.id}`,
-        overall: {
-          score: res.overallScore,
-          maxScore: ccMax + riMax + imMax,
-          band: res.overallBand,
-        },
-        dimensions: [
-          { name: dims.cognitive?.name ?? "", score: res.cognitiveScore, maxScore: ccMax, band: res.cognitiveBand },
-          { name: dims.relational?.name ?? "", score: res.relationalScore, maxScore: riMax, band: res.relationalBand },
-          { name: dims.inner?.name ?? "", score: res.innerScore, maxScore: imMax, band: res.innerBand },
-        ],
-      };
+      return res
+        ? { kind: "closed", message: "Your readout is saved." }
+        : { kind: "closed", message: "Session ended." };
     }
 
     default:
