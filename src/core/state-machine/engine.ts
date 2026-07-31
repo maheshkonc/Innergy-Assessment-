@@ -210,8 +210,11 @@ async function handleAskEmail(
   actions: OutboundAction[],
 ): Promise<HandleInboundResult> {
   const email = sanitiseFreeText(input.text);
-  if (!email || !email.includes("@")) {
-    const body = await render(prisma, "invalid_answer", input, {});
+  if (!email || !isEmailAddress(email)) {
+    // Deliberately NOT invalid_answer: that key is the answer-a-question
+    // message, which on the team variant reads "reply with a number from 1
+    // to 5" — nonsense at a free-text step.
+    const body = await render(prisma, "invalid_email", input, {});
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "ask_email" } };
   }
@@ -399,6 +402,17 @@ async function handlePostFlow(
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
+
+/**
+ * Pragmatic address check: a local part, one @, and a dotted domain with a
+ * plausible TLD. Deliberately not RFC 5322 — the job is to catch "skjs" and
+ * ordinary typos before the report is sent somewhere that cannot receive it,
+ * not to adjudicate exotic-but-legal addresses. Runs server-side so the
+ * WhatsApp channel gets the same guarantee as the web chat.
+ */
+export function isEmailAddress(value: string): boolean {
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,}$/.test(value);
+}
 
 function sanitiseFreeText(raw: string): string | null {
   const cleaned = raw.replace(/\s+/g, " ").trim();

@@ -104,6 +104,11 @@ export function AssessmentChat({
   const [queued, setQueued] = useState<Bubble[][]>([]);
   const [heldWidget, setHeldWidget] = useState<Widget | null>(null);
 
+  // "View my results" is a one-shot. The closed state persists after it is
+  // pressed, so without this the button would re-offer itself on top of the
+  // readout it had just re-sent, forever.
+  const [resultsResent, setResultsResent] = useState(false);
+
   const revealChunk = useCallback(async (chunk: Bubble[]) => {
     for (const b of chunk) {
       setTyping(true);
@@ -130,6 +135,7 @@ export function AssessmentChat({
           setWidget(null);
           setQueued([]);
           setHeldWidget(null);
+          setResultsResent(false);
           setState("loading");
         }
         if (userEcho) {
@@ -200,6 +206,16 @@ export function AssessmentChat({
       setBusy(false);
     }
   }, [queued, heldWidget, revealChunk]);
+
+  // Marks the one-shot as spent before the request goes out, so the button
+  // cannot be pressed twice while the re-send is in flight.
+  const handleWidgetSubmit = useCallback(
+    (text?: string, userEcho?: string | BubbleInput) => {
+      if (text === "RESULTS") setResultsResent(true);
+      return send(text, userEcho);
+    },
+    [send],
+  );
 
   const handleRestart = useCallback(() => {
     if (!window.confirm("Start a new assessment from scratch? Your current progress will be closed.")) return;
@@ -287,11 +303,14 @@ export function AssessmentChat({
                 <ContinueGate busy={busy} onContinue={handleContinue} />
               </div>
             )}
-            {widget && queued.length === 0 && !typing && (
-              <div className="innergy-bubble-in pt-2">
-                <WidgetView widget={widget} busy={busy} onSubmit={send} />
-              </div>
-            )}
+            {widget &&
+              queued.length === 0 &&
+              !typing &&
+              !(widget.kind === "closed" && resultsResent) && (
+                <div className="innergy-bubble-in pt-2">
+                  <WidgetView widget={widget} busy={busy} onSubmit={handleWidgetSubmit} />
+                </div>
+              )}
           </div>
         </div>
       </div>
@@ -665,6 +684,10 @@ function WidgetView({
       return <YesNoWidget busy={busy} onSubmit={onSubmit} />;
 
     case "closed":
+      // Offered once. The parent stops rendering this widget after it is
+      // pressed — see resultsResent — because the closed state does not
+      // change, so the button would otherwise return on top of the readout it
+      // had just re-sent.
       return (
         <button
           disabled={busy}
@@ -799,10 +822,7 @@ function QuestionWidget({
   return (
     <div className="space-y-4">
       <div>
-        <div className="inline-flex items-center rounded-full bg-[var(--accent-yellow)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
-          {widget.sectionName}
-        </div>
-        <h3 className="mt-2 font-serif-heading text-lg font-semibold leading-relaxed text-[var(--foreground)]">
+        <h3 className="font-serif-heading text-lg font-semibold leading-relaxed text-[var(--foreground)]">
           {widget.stem}
         </h3>
       </div>

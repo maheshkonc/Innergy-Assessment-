@@ -105,6 +105,28 @@ export async function POST(req: NextRequest) {
 
   const actions: OutboundAction[] = [];
 
+  // --- RESULTS against an already-finished session (PRD §11.10) ---
+  // The lookup above matches only in-progress sessions, so once the flow
+  // completes there is nothing to step. Without this branch RESULTS falls
+  // through to bootstrapping below and silently restarts the assessment
+  // instead of re-sending the readout.
+  if (!session && (body.text ?? "").trim().toUpperCase() === "RESULTS") {
+    const finished = await prisma.session.findFirst({
+      where: { tenantId: tenant.id, userId: user.id, status: "completed" },
+      orderBy: { completedAt: "desc" },
+    });
+    if (finished) {
+      const { actions: resent } = await resendLatestResults(prisma, { tenant, user });
+      const resp: ChatResponse = {
+        sessionId: finished.id,
+        state: "closed",
+        actions: toWebActions(resent),
+        widget: { kind: "closed", message: "Your readout is saved." },
+      };
+      return withCookie(NextResponse.json(resp), identity.setCookie);
+    }
+  }
+
   // --- Bootstrap: first call, no in-progress session yet ---
   if (!session) {
     const instrumentVersionId = await resolveInstrumentForAudience(tenant.id, audience);
@@ -316,12 +338,16 @@ async function renderResumeActions(
         const stored = res.interpretationJson as {
           overallNarrative?: string;
           lowestDimensionName?: string;
+          balanceAnalysis?: string;
         };
         if (stored.overallNarrative) {
           out.push({ kind: "text", body: stored.overallNarrative });
         }
         await pushTemplate("debrief_cta_1", {
           lowest_dimension_name: stored.lowestDimensionName ?? "",
+          // Rendered once at finalise time and stored, so the resumed thread
+          // shows the same analysis rather than an empty paragraph.
+          balance_analysis: stored.balanceAnalysis ?? "",
         });
         await pushTemplate("debrief_cta_2");
       }

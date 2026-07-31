@@ -5,7 +5,6 @@
 // picked the URL carries ?type=… and the matching diagnostic loads.
 
 import { prisma } from "@/db/client";
-import { DIMENSION_TAGS, loadDimensionsByTag } from "@/core/dimensions";
 import { AssessmentChat, type Audience } from "./AssessmentChat";
 import { AudienceChooser, type AudienceCard } from "./AudienceChooser";
 
@@ -30,7 +29,7 @@ const COPY: Record<Audience, { eyebrow: string; heading: React.ReactNode; sub: s
         <em className="text-[var(--accent-pink)]">at risk</em>.
       </>
     ),
-    sub: "Score your top 10–20 leaders as a group.",
+    sub: "Take the assessment on behalf of your team.",
   },
 };
 
@@ -43,7 +42,7 @@ const CARD_COPY: Record<Audience, Pick<AudienceCard, "eyebrow" | "title" | "blur
   team: {
     eyebrow: "For your team",
     title: "Team",
-    blurb: "Where your top 10–20 leaders are strong — and at risk.",
+    blurb: "Where your top 10–20 leaders are strong — and where they are at risk.",
   },
 };
 
@@ -51,16 +50,10 @@ const CARD_COPY: Record<Audience, Pick<AudienceCard, "eyebrow" | "title" | "blur
  * Card stats come from each instrument version's metadata, so editing an
  * instrument keeps the chooser honest instead of drifting from a literal.
  */
-async function loadChooserData(): Promise<{
-  cards: AudienceCard[];
-  dimensionNames: string[];
-}> {
-  const [dims, instruments] = await Promise.all([
-    loadDimensionsByTag(prisma),
-    prisma.instrument.findMany({
-      include: { currentVersion: { select: { id: true, metadata: true } } },
-    }),
-  ]);
+async function loadChooserData(): Promise<AudienceCard[]> {
+  const instruments = await prisma.instrument.findMany({
+    include: { currentVersion: { select: { id: true, metadata: true } } },
+  });
 
   const cards: AudienceCard[] = [];
   for (const audience of ["individual", "team"] as const) {
@@ -90,12 +83,7 @@ async function loadChooserData(): Promise<{
     });
   }
 
-  return {
-    cards,
-    dimensionNames: DIMENSION_TAGS.map((t) => dims[t]?.name).filter(
-      (n): n is string => Boolean(n),
-    ),
-  };
+  return cards;
 }
 
 export default async function TakePage({
@@ -108,7 +96,7 @@ export default async function TakePage({
     type === "team" ? "team" : type === "individual" ? "individual" : null;
 
   const chooser = audience === null
-    ? await loadChooserData().catch(() => ({ cards: [], dimensionNames: [] }))
+    ? await loadChooserData().catch((): AudienceCard[] => [])
     : null;
 
   return (
@@ -127,11 +115,8 @@ export default async function TakePage({
 
       {audience === null ? (
         <div className="mx-auto max-w-6xl px-6 pb-20 pt-8 lg:px-12 lg:pt-16">
-          {chooser && chooser.cards.length > 0 ? (
-            <AudienceChooser
-              cards={chooser.cards}
-              dimensionNames={chooser.dimensionNames}
-            />
+          {chooser && chooser.length > 0 ? (
+            <AudienceChooser cards={chooser} />
           ) : (
             <p className="py-20 text-center text-sm text-[var(--foreground)] opacity-60">
               No assessments are available right now. Please try again shortly.

@@ -35,6 +35,13 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   { key: "ask_name", body: "Great. What's your first name?" },
   { key: "ask_organisation", body: "Thanks, {{name}}. And which organisation are you with?" },
   { key: "ask_email", body: "Got it. And the email where we can send your report?" },
+  // Its own key rather than invalid_answer — the latter is question copy and
+  // reads "reply with a number from 1 to 5" on the team variant.
+  {
+    key: "invalid_email",
+    body:
+      "That doesn't look like an email address. Please send it in the form name@company.com so your report reaches you.",
+  },
   { key: "org_ack", body: "Perfect. Let's begin, {{name}}." },
 
   // --- Section intros ---

@@ -44,6 +44,12 @@ interface EnrichedPayload {
   lowestDimensionName: string | null;
   coach: { name: string; bookingUrl: string | null } | null;
   tenant: { name: string; logoUrl: string | null } | null;
+  /**
+   * Which diagnostic produced the result, so the report can title itself
+   * correctly. Optional: enriched payloads are persisted onto the notification
+   * row, and rows written before this field existed will not carry it.
+   */
+  audience?: "individual" | "team" | null;
 }
 
 async function tick() {
@@ -105,6 +111,20 @@ async function enrich(n: Notification): Promise<EnrichedPayload | null> {
     }),
   ]);
 
+  // Read from the version the result is pinned to, not the tenant's current
+  // instrument, so a report generated before a publish still titles itself
+  // after the diagnostic the user actually took.
+  const version = result
+    ? await prisma.instrumentVersion.findUnique({
+      where: { id: result.instrumentVersionId },
+      select: { metadata: true },
+    })
+    : null;
+  const audience =
+    ((version?.metadata ?? {}) as Record<string, unknown>).audience === "team"
+      ? ("team" as const)
+      : ("individual" as const);
+
   const interpretation = (result?.interpretationJson as InterpretationJson | null) ?? null;
   let lowestDimensionName: string | null = null;
   if (result?.lowestDimensionId) {
@@ -127,6 +147,7 @@ async function enrich(n: Notification): Promise<EnrichedPayload | null> {
     lowestDimensionName,
     coach: coachJoin ? { name: coachJoin.coach.name, bookingUrl: coachJoin.coach.bookingUrl } : null,
     tenant: tenant ? { name: tenant.name, logoUrl: tenant.logoUrl } : null,
+    audience,
   };
 }
 
@@ -265,9 +286,19 @@ function renderUserReportEmail(
     ? enriched.tenant.logoUrl
     : `${baseUrl}/logo.png`;
 
+  // The two diagnostics land in the same inbox, so the report has to say which
+  // one it is — a team readout titled "Your AI Leadership readiness report"
+  // reads as a personal assessment and its narratives contradict that.
+  const isTeam = enriched?.audience === "team";
+  const reportName = isTeam ? "Team Readiness Report" : "Individual AI Readiness Report";
+  const headingAccent = isTeam ? "Team" : "Individual AI";
+  const introLine = isTeam
+    ? `Hi ${name} — here's your team's detailed readout across the three dimensions.`
+    : `Hi ${name} — here's your detailed readout across the three dimensions.`;
+
   const subject = overall
-    ? `Your ${tenantName} Leadership Readiness Report — ${overall.band}`
-    : `Your ${tenantName} Leadership Readiness Report`;
+    ? `Your ${tenantName} ${reportName} — ${overall.band}`
+    : `Your ${tenantName} ${reportName}`;
 
   // Innergy brand palette — mirrors src/app/globals.css :root vars so the
   // email matches what users see on /take. Composition rules also mirror the
@@ -349,9 +380,9 @@ function renderUserReportEmail(
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid ${containerLight};box-shadow:0 2px 6px rgba(54,33,27,0.06)">
           <tr><td style="padding:32px 24px 16px;text-align:left">
             <!-- signature eyebrow: dark-brown pill + yellow uppercase, mirrors /take -->
-            <div class="innergy-eyebrow" style="display:inline-block;background:${ink};color:${accentYellow};font-size:10px;padding:6px 14px;border-radius:999px">Leadership Diagnostic</div>
-            <h1 class="innergy-h1" style="margin:18px 0 0;font-size:34px;color:${ink}">Your <em style="color:${accentPink};font-style:italic;font-weight:600">AI Leadership</em> readiness report</h1>
-            <p class="innergy-body innergy-muted" style="margin:14px 0 0;font-size:14px">Hi ${escapeHtml(name)} — here's your detailed readout across the three dimensions.</p>
+            <div class="innergy-eyebrow" style="display:inline-block;background:${ink};color:${accentYellow};font-size:10px;padding:6px 14px;border-radius:999px">Leadership Assessment</div>
+            <h1 class="innergy-h1" style="margin:18px 0 0;font-size:34px;color:${ink}">Your <em style="color:${accentPink};font-style:italic;font-weight:600">${escapeHtml(headingAccent)}</em> readiness report</h1>
+            <p class="innergy-body innergy-muted" style="margin:14px 0 0;font-size:14px">${escapeHtml(introLine)}</p>
           </td></tr>
 
           ${overall ? `
@@ -373,7 +404,7 @@ function renderUserReportEmail(
           ${ctaBlock}
 
           <tr><td style="padding:20px 24px;border-top:1px solid ${containerLight};text-align:center" class="innergy-body">
-            <div class="innergy-eyebrow" style="font-size:10px;color:${ink}">${escapeHtml(tenantName)} · Leadership diagnostic</div>
+            <div class="innergy-eyebrow" style="font-size:10px;color:${ink}">${escapeHtml(tenantName)} · Leadership assessment</div>
             <div style="margin-top:6px;font-size:12px;color:${muted}">This report is generated from your assessment responses. Your answers are private to you and your coach.</div>
           </td></tr>
         </table>
@@ -384,7 +415,7 @@ function renderUserReportEmail(
   const textLines = [
     `Hi ${name},`,
     "",
-    "Here's your AI Leadership Readiness Report.",
+    `Here's your ${reportName}.`,
     "",
     overall ? `Overall: ${overall.score} · ${overall.band}` : "",
     overallNarrative,
