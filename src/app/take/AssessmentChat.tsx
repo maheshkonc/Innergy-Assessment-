@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   parseDimensionResult,
@@ -8,6 +8,7 @@ import {
   type DimensionResult,
   type OverallResult,
 } from "./result-parse";
+import { chunkResultReveal } from "./reveal-chunks";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -31,13 +32,6 @@ type Widget =
     options: Array<{ label: OptionLabel; text: string }>;
   }
   | { kind: "yes_no"; context: "debrief_cta" | "coaching_interest" }
-  | {
-    kind: "results";
-    resultId: string;
-    imageUrl: string;
-    overall: { score: number; maxScore: number; band: string };
-    dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
-  }
   | { kind: "closed"; message: string }
   | { kind: "unsupported"; state: string };
 
@@ -62,13 +56,16 @@ type Bubble =
     stem: string;
     optionLabel: OptionLabel;
     optionText: string;
-  })
-  | (BubbleBase & {
-    author: "bot";
-    kind: "result_chart";
-    dimensions: Array<{ name: string; score: number; maxScore: number; band: string }>;
-    imageUrl: string;
   });
+
+/**
+ * A bubble that renders as a result card — the three dimension readouts and
+ * the overall score. These are the beats the reveal pauses between.
+ */
+function isResultBubble(b: Bubble): boolean {
+  if (b.author !== "bot" || b.kind !== "text") return false;
+  return parseDimensionResult(b.body) !== null || parseOverallResult(b.body) !== null;
+}
 
 // Distributive Omit — plain Omit over a union collapses shared keys and
 // loses the discriminant, which breaks the "answered_question" variant.
@@ -102,6 +99,23 @@ export function AssessmentChat({
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Result groups still waiting behind a "Yes, go ahead" press, plus the
+  // widget held back until the last of them has been read.
+  const [queued, setQueued] = useState<Bubble[][]>([]);
+  const [heldWidget, setHeldWidget] = useState<Widget | null>(null);
+
+  const revealChunk = useCallback(async (chunk: Bubble[]) => {
+    for (const b of chunk) {
+      setTyping(true);
+      await sleep(TYPING_MS);
+      setTyping(false);
+      // Re-stamp so the timestamp reflects when the user actually saw
+      // the bubble, not when the response arrived.
+      setBubbles((prev) => [...prev, { ...b, ts: Date.now() }]);
+      await sleep(BETWEEN_BUBBLES_MS);
+    }
+  }, []);
+
   const send = useCallback(
     async (
       text?: string,
@@ -114,6 +128,8 @@ export function AssessmentChat({
         if (opts?.reset) {
           setBubbles([]);
           setWidget(null);
+          setQueued([]);
+          setHeldWidget(null);
           setState("loading");
         }
         if (userEcho) {
@@ -138,38 +154,26 @@ export function AssessmentChat({
           return;
         }
         const data = (await res.json()) as ChatResponse;
-        const incoming: Bubble[] = data.actions.map((a) => {
-          if (a.kind === "text") {
-            return { author: "bot", kind: "text", body: a.body, ts: Date.now() };
-          } else {
-            // If we have results data in the widget, attach it to the image bubble
-            if (data.widget.kind === "results" && a.imageUrl.includes("/api/image/result/")) {
-              return {
-                author: "bot",
-                kind: "result_chart",
-                imageUrl: a.imageUrl,
-                dimensions: data.widget.dimensions,
-                ts: Date.now(),
-              };
-            }
-            return { author: "bot", kind: "image", imageUrl: a.imageUrl, ts: Date.now() };
-          }
-        });
+        const incoming: Bubble[] = data.actions.map((a) =>
+          a.kind === "text"
+            ? { author: "bot", kind: "text", body: a.body, ts: Date.now() }
+            : { author: "bot", kind: "image", imageUrl: a.imageUrl, ts: Date.now() },
+        );
 
         // Reveal one bubble at a time with a typing indicator between,
-        // matching the "someone is replying to you" feel.
-        for (const b of incoming) {
-          setTyping(true);
-          await sleep(TYPING_MS);
-          setTyping(false);
-          // Re-stamp so the timestamp reflects when the user actually saw
-          // the bubble, not when the response arrived.
-          setBubbles((prev) => [...prev, { ...b, ts: Date.now() }]);
-          await sleep(BETWEEN_BUBBLES_MS);
-        }
+        // matching the "someone is replying to you" feel. On the results turn
+        // that would be one long unbroken scroll, so the readout is split into
+        // groups the reader steps through — see chunkResultReveal.
+        const [first, ...rest] = chunkResultReveal(incoming, isResultBubble);
+        if (first) await revealChunk(first);
 
         setState(data.state);
-        setWidget(data.widget);
+        if (rest.length > 0) {
+          setQueued(rest);
+          setHeldWidget(data.widget);
+        } else {
+          setWidget(data.widget);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "network error");
       } finally {
@@ -177,8 +181,25 @@ export function AssessmentChat({
         setBusy(false);
       }
     },
-    [tenantSlug, audience],
+    [tenantSlug, audience, revealChunk],
   );
+
+  // "Yes, go ahead" — release the next group of the readout. Purely a pacing
+  // control, so it makes no request and echoes no user bubble.
+  const handleContinue = useCallback(async () => {
+    setBusy(true);
+    try {
+      const [next, ...rest] = queued;
+      if (next) await revealChunk(next);
+      setQueued(rest);
+      if (rest.length === 0) {
+        setWidget(heldWidget);
+        setHeldWidget(null);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [queued, heldWidget, revealChunk]);
 
   const handleRestart = useCallback(() => {
     if (!window.confirm("Start a new assessment from scratch? Your current progress will be closed.")) return;
@@ -257,14 +278,16 @@ export function AssessmentChat({
           <div className="space-y-2.5">
             {bubbles.map((b, i) => (
               <div key={i} className="innergy-bubble-in">
-                <BubbleView
-                  bubble={b}
-                  resultsData={widget?.kind === "results" ? widget : null}
-                />
+                <BubbleView bubble={b} />
               </div>
             ))}
             {typing && <TypingBubble />}
-            {widget && !typing && (
+            {queued.length > 0 && !typing && (
+              <div className="innergy-bubble-in pt-2">
+                <ContinueGate busy={busy} onContinue={handleContinue} />
+              </div>
+            )}
+            {widget && queued.length === 0 && !typing && (
               <div className="innergy-bubble-in pt-2">
                 <WidgetView widget={widget} busy={busy} onSubmit={send} />
               </div>
@@ -368,13 +391,25 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
   );
 }
 
-function BubbleView({
-  bubble,
-  resultsData,
+function ContinueGate({
+  busy,
+  onContinue,
 }: {
-  bubble: Bubble;
-  resultsData: Extract<Widget, { kind: "results" }> | null;
+  busy: boolean;
+  onContinue: () => void | Promise<void>;
 }) {
+  return (
+    <button
+      disabled={busy}
+      onClick={() => void onContinue()}
+      className="w-full rounded-xl bg-[var(--foreground)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#3B2B20] disabled:opacity-40"
+    >
+      {busy ? "…" : "Yes, go ahead →"}
+    </button>
+  );
+}
+
+function BubbleView({ bubble }: { bubble: Bubble }) {
   const time = formatTime(bubble.ts);
 
   if (bubble.author === "user") {
@@ -416,20 +451,6 @@ function BubbleView({
       </div>
     );
   }
-  if (bubble.kind === "result_chart") {
-    return (
-      <div className="flex items-end gap-2">
-        <Avatar who="bot" />
-        <div className="flex max-w-[85%] flex-col items-start gap-1">
-          <div className="w-full min-w-[300px] overflow-hidden rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm">
-            <AssessmentSpiderChart dimensions={bubble.dimensions} />
-          </div>
-          <span className="text-[10px] text-[#8A7868]">{time}</span>
-        </div>
-      </div>
-    );
-  }
-
   if (bubble.kind === "image") {
     // If it's a result image, hide it on web because we render the real ApexChart 
     // inside the subsequent overall result card for a cleaner interactive experience.
@@ -643,9 +664,6 @@ function WidgetView({
     case "yes_no":
       return <YesNoWidget busy={busy} onSubmit={onSubmit} />;
 
-    case "results":
-      return <ResultsWidget widget={widget} />;
-
     case "closed":
       return (
         <button
@@ -688,9 +706,10 @@ function WelcomeWidget({
           ▶
         </button>
         <h2 className="font-serif text-xl text-[var(--foreground)]">Ready when you are</h2>
-        <p className="text-sm text-[#8A7868]">
-          25 quick questions across 3 dimensions. About 10–12 minutes.
-        </p>
+        {/* Length and duration are stated once, by the welcome copy above,
+            which reads them from the instrument version. Repeating them here
+            meant the team diagnostic advertised the individual one's 25
+            questions and 10–12 minutes. */}
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
@@ -1016,47 +1035,3 @@ function AssessmentSpiderChart({
   );
 }
 
-function ResultsWidget({ widget }: { widget: Extract<Widget, { kind: "results" }> }) {
-  return (
-    <div className="flex flex-col gap-4 py-2 innergy-bubble-in">
-      <div className="rounded-2xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]/20">
-        <AssessmentSpiderChart dimensions={widget.dimensions} />
-      </div>
-
-      <div className="rounded-xl bg-[var(--foreground)] p-4 text-white shadow-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-yellow)]">
-          Overall Status
-        </div>
-        <div className="mt-1 flex items-baseline justify-between">
-          <div className="flex items-baseline gap-1.5 text-3xl font-bold">
-            {widget.overall.score}
-            <span className="text-sm font-normal text-white/50">/ {widget.overall.maxScore}</span>
-          </div>
-          <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider">
-            {widget.overall.band}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {widget.dimensions.map((d) => (
-          <div
-            key={d.name}
-            className="rounded-xl border border-[var(--container-light)] bg-white p-4 shadow-sm transition hover:ring-1 hover:ring-[var(--accent-yellow)]"
-          >
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)] opacity-60">
-              {d.name}
-            </div>
-            <div className="mt-1 flex items-baseline gap-1 font-serif text-lg font-bold text-[var(--foreground)]">
-              {d.score}
-              <span className="font-sans text-[10px] font-normal text-[var(--foreground)] opacity-50">/ {d.maxScore}</span>
-            </div>
-            <div className="mt-1 text-[10px] font-medium uppercase tracking-tight text-[var(--accent-pink)] opacity-80">
-              {d.band}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

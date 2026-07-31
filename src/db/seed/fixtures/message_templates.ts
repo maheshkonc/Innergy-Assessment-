@@ -9,18 +9,21 @@ export interface TemplateSeed {
 
 export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   // --- Welcome sequence (FR-2.2: three messages) ---
+  // Openers carry instructions only — what this is, how long, how to answer.
+  // The explanation of what each dimension means belongs in the results, not
+  // here, where it is read before the user has any score to attach it to.
   {
     key: "welcome_1",
     body:
       "Hi {{name_or_there}} — welcome to the AI Leadership Readiness Assessment from {{tenant_name}}.\n\n" +
-      "I'm here on behalf of {{coach_name}} to help you understand where you stand across three dimensions that matter most for leading in the AI age: {{dimension_names_list}}.",
+      "I'm here on behalf of {{coach_name}}.",
   },
   {
     key: "welcome_2",
     body:
-      "A candid read on your team's area of competence for leading the future.\n\n" +
-      "3 Dimensions | 25 questions | 10 minutes. You will get the report at the end and also in your email.\n\n" +
-      "Instruction: Reflect on how your current team operates. This ideally is the team you are a part of or the team which reports into you.",
+      "3 Dimensions | {{question_count}} questions | {{duration_estimate}}. You will get the report at the end and also in your email.\n\n" +
+      "Instruction: Reflect on how your current team operates — ideally the team you are a part of, or the team which reports into you. " +
+      "For each question, pick the option that fits best. There are no right answers.",
   },
   {
     key: "welcome_3",
@@ -31,10 +34,14 @@ export const GLOBAL_MESSAGE_TEMPLATES: TemplateSeed[] = [
   // --- Name + org capture ---
   { key: "ask_name", body: "Great. What's your first name?" },
   { key: "ask_organisation", body: "Thanks, {{name}}. And which organisation are you with?" },
-  { key: "ask_email", body: "Got it. And what's your work email?" },
+  { key: "ask_email", body: "Got it. And the email where we can send your report?" },
   { key: "org_ack", body: "Perfect. Let's begin, {{name}}." },
 
   // --- Section intros ---
+  // Retained as content (Section.introTemplateKey still points at these) but no
+  // longer emitted: the flow runs straight through the questions without
+  // announcing section boundaries. Each question already carries its section
+  // name via question_body.
   {
     key: "section_intro_cognitive",
     body:

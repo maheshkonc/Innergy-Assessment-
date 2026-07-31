@@ -306,12 +306,19 @@ async function seedInnergyTenant() {
 
   const coach = await prisma.coach.upsert({
     where: { id: "coach_rashmi" },
-    update: { bookingUrl: "https://calendly.com/rashmii-sharma/meeting" },
+    update: {
+      bookingUrl: "https://calendly.com/rashmii-sharma/meeting",
+      // Seeded, not just set by hand in one database: the closing message
+      // renders "Connect with … on LinkedIn: {{coach_linkedin_url}}"
+      // unconditionally, so an unset value ships a dangling label to the user.
+      linkedinUrl: "https://linkedin.com/in/rashmisharmaofficial",
+    },
     create: {
       id: "coach_rashmi",
       name: "Rashmi Sharma",
       // Placeholders — replace with real values (§12.9).
       bookingUrl: "https://calendly.com/rashmii-sharma/meeting",
+      linkedinUrl: "https://linkedin.com/in/rashmisharmaofficial",
       notificationChannel: "email",
       notificationAddress: "rashmi@innergy.example",
     },
