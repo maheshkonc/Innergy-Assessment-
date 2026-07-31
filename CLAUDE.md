@@ -150,8 +150,12 @@ sign-off before production):
 1. **Band calibration.** The source doc prints one set of section bands
    (20-25 / 14-19 / 8-13 / 5-7) that only fits a /25 section. Applied literally,
    Section B's 26–30 falls in no band and Section C can never reach "Strong".
-   The fixture scales the cutoffs proportionally per section; raw totals still
-   display as /25, /30, /20 as the doc prints them.
+   Section bands on **both** instruments are therefore derived from percentages
+   of each section's own maximum — above 75% Strong, 50–75% Developing, 25–50%
+   At Risk, below 25% Critical Gap — by
+   [`section-bands.ts`](./src/db/seed/fixtures/section-bands.ts). Raw totals
+   still display as /25, /30, /20 as the doc prints them. Overall bands (/75
+   and /123) are unchanged and still use the documents' raw ranges.
 2. **Dimension name.** The doc says "Inner Resilience" in its narrative and
    "Inner Mastery" in the Section C heading. The fixture reuses the existing
    Inner Mastery dimension row.

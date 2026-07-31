@@ -15,10 +15,12 @@
 //      that only fits a section scored out of 25. Applied literally, Section B
 //      scores of 26–30 fall into no band at all and Section C can never reach
 //      "Strong", while its 5–7 "Critical Gap" floor sits below the section's
-//      actual minimum of 4. The cutoffs are therefore scaled proportionally to
-//      each section's own maximum (see SECTION_*_BANDS below). Raw totals are
-//      still displayed as /25, /30 and /20 exactly as the doc prints them.
-//      → Confirm the scaled cutoffs with Rashmi before production use.
+//      actual minimum of 4. Bands are therefore derived from percentages of
+//      each section's own maximum — above 75% Strong, 50–75% Developing,
+//      25–50% At Risk, below 25% Critical Gap (see section-bands.ts), which
+//      also makes a label mean the same thing on both instruments. Raw totals
+//      are still displayed as /25, /30 and /20 as the doc prints them.
+//      → Confirm the percentage cutoffs with Rashmi before production use.
 //
 //   2. DIMENSION NAME. The doc calls the third dimension "Inner Resilience" in
 //      its narrative and "Inner Mastery" in the Section C heading. This fixture
@@ -30,6 +32,7 @@
 
 import type { InstrumentSpec, OptionLabel } from "../../../core/scoring/types";
 import { DIM_COGNITIVE, DIM_RELATIONAL, DIM_INNER } from "./innergy_fls_v1";
+import { percentageSectionBands } from "./section-bands";
 
 export const TEAM_INSTRUMENT_ID = "inst_innergy_team";
 export const TEAM_INSTRUMENT_VERSION_ID = "instv_innergy_team_v1";
@@ -160,29 +163,18 @@ const AT_RISK =
 const CRITICAL =
   "This is not a development priority — it is a business risk. Leaders operating with a critical gap in this dimension are actively limiting the performance of the people around them and the organisation's ability to execute at pace.";
 
-// Section A — max 25. Doc's cutoffs apply directly.
-export const TEAM_SECTION_A_BANDS = [
-  { minScore: 20, maxScore: 25, bandLabel: "Strong", colorHex: "#16a34a", interpretationTemplate: STRONG },
-  { minScore: 14, maxScore: 19, bandLabel: "Developing", colorHex: "#eab308", interpretationTemplate: DEVELOPING },
-  { minScore: 8, maxScore: 13, bandLabel: "At Risk", colorHex: "#f97316", interpretationTemplate: AT_RISK },
-  { minScore: 5, maxScore: 7, bandLabel: "Critical Gap", colorHex: "#dc2626", interpretationTemplate: CRITICAL },
-];
+// All three sections band on the same percentage rule — see section-bands.ts.
+// Raw totals are still displayed as /25, /30 and /20 as the doc prints them.
+const TEAM_BAND_COPY = {
+  strong: STRONG,
+  developing: DEVELOPING,
+  atRisk: AT_RISK,
+  critical: CRITICAL,
+};
 
-// Section B — max 30 (6 questions). Cutoffs × 1.2, rounded to leave no gaps.
-export const TEAM_SECTION_B_BANDS = [
-  { minScore: 24, maxScore: 30, bandLabel: "Strong", colorHex: "#16a34a", interpretationTemplate: STRONG },
-  { minScore: 17, maxScore: 23, bandLabel: "Developing", colorHex: "#eab308", interpretationTemplate: DEVELOPING },
-  { minScore: 10, maxScore: 16, bandLabel: "At Risk", colorHex: "#f97316", interpretationTemplate: AT_RISK },
-  { minScore: 6, maxScore: 9, bandLabel: "Critical Gap", colorHex: "#dc2626", interpretationTemplate: CRITICAL },
-];
-
-// Section C — max 20 (4 questions). Cutoffs × 0.8; floor is 4, not 5.
-export const TEAM_SECTION_C_BANDS = [
-  { minScore: 16, maxScore: 20, bandLabel: "Strong", colorHex: "#16a34a", interpretationTemplate: STRONG },
-  { minScore: 11, maxScore: 15, bandLabel: "Developing", colorHex: "#eab308", interpretationTemplate: DEVELOPING },
-  { minScore: 7, maxScore: 10, bandLabel: "At Risk", colorHex: "#f97316", interpretationTemplate: AT_RISK },
-  { minScore: 4, maxScore: 6, bandLabel: "Critical Gap", colorHex: "#dc2626", interpretationTemplate: CRITICAL },
-];
+export const TEAM_SECTION_A_BANDS = percentageSectionBands(25, TEAM_BAND_COPY);
+export const TEAM_SECTION_B_BANDS = percentageSectionBands(30, TEAM_BAND_COPY);
+export const TEAM_SECTION_C_BANDS = percentageSectionBands(20, TEAM_BAND_COPY);
 
 // Overall — max 75. Doc's ranges verbatim ("Below 25" floored at the real
 // minimum of 15, i.e. all fifteen questions answered 1).

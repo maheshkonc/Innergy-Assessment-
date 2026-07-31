@@ -17,17 +17,13 @@ export interface AudienceCard {
   meta: string;
 }
 
-export function AudienceChooser({
-  cards,
-  dimensionNames,
-}: {
-  cards: AudienceCard[];
-  dimensionNames: string[];
-}) {
+export function AudienceChooser({ cards }: { cards: AudienceCard[] }) {
   return (
     <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
       {/* ── Left: the pitch ───────────────────────────────────────────── */}
-      <div>
+      {/* Short by design — the badge, the headline and one reassurance. It is
+          centred against the taller card column rather than padded out. */}
+      <div className="lg:pr-4">
         <span className="inline-flex items-center rounded-full bg-[var(--foreground)] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--accent-yellow)]">
           Full Spectrum Leadership
         </span>
@@ -38,28 +34,7 @@ export function AudienceChooser({
           or your team.
         </h1>
 
-        {dimensionNames.length > 0 && (
-          <>
-            <p className="mt-10 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)] opacity-45">
-              Three dimensions, either way
-            </p>
-            <ol className="mt-4 border-t border-[var(--container-light)]">
-              {dimensionNames.map((name, i) => (
-                <li
-                  key={name}
-                  className="flex items-baseline gap-5 border-b border-[var(--container-light)] py-4"
-                >
-                  <span className="font-mono text-xs font-semibold text-[var(--accent-pink)]">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="text-lg text-[var(--foreground)]">{name}</span>
-                </li>
-              ))}
-            </ol>
-          </>
-        )}
-
-        <p className="mt-8 text-sm text-[var(--foreground)] opacity-45">
+        <p className="mt-10 text-sm text-[var(--foreground)] opacity-45">
           Anonymous until you share a name.
         </p>
       </div>
@@ -86,7 +61,10 @@ export function AudienceChooser({
               {card.title}
             </h2>
 
-            <p className="mt-3 max-w-sm text-[15px] leading-relaxed text-[var(--foreground)] opacity-70">
+            {/* Two lines are reserved whether or not the blurb needs them, so
+                the one-line Individual card matches the two-line Team card
+                instead of sitting shorter beside it. */}
+            <p className="mt-3 min-h-[3rem] max-w-sm text-[15px] leading-relaxed text-[var(--foreground)] opacity-70">
               {card.blurb}
             </p>
 

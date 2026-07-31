@@ -103,3 +103,56 @@ describe("notifications worker renderBody", () => {
     expect(body).not.toContain("Overall:");
   });
 });
+
+describe("notifications worker user_report email", () => {
+  const { renderEmail } = __internal;
+
+  function reportPayload(audience: "individual" | "team" | undefined) {
+    return {
+      userName: "Mahesh",
+      organisation: "Innergy",
+      cognitive: { score: 14, band: "Developing" },
+      relational: { score: 18, band: "Developing" },
+      inner: { score: 10, band: "Developing" },
+      overall: { score: 42, band: "Partially Ready" },
+      generatedAt: null,
+      interpretation: null,
+      lowestDimensionName: "Inner Mastery",
+      coach: null,
+      tenant: { name: "Innergy", logoUrl: null },
+      ...(audience ? { audience } : {}),
+    };
+  }
+  const report = baseNotification({ type: "user_report" });
+
+  it("titles a team result as a Team Readiness Report", () => {
+    const { subject, html, text } = renderEmail(report, reportPayload("team"));
+    expect(subject).toBe("Your Innergy Team Readiness Report — Partially Ready");
+    expect(html).toContain("readiness report");
+    expect(html).toContain(">Team</em>");
+    expect(html).toContain("here&#39;s your team&#39;s detailed readout");
+    expect(text).toContain("Here's your Team Readiness Report.");
+    // The individual framing must not leak into a team readout.
+    expect(html).not.toContain("Individual AI");
+  });
+
+  it("titles an individual result as an Individual AI Readiness Report", () => {
+    const { subject, html, text } = renderEmail(report, reportPayload("individual"));
+    expect(subject).toBe("Your Innergy Individual AI Readiness Report — Partially Ready");
+    expect(html).toContain(">Individual AI</em>");
+    expect(text).toContain("Here's your Individual AI Readiness Report.");
+    expect(html).not.toContain("your team&#39;s detailed readout");
+  });
+
+  it("treats a payload written before the audience field as individual", () => {
+    const { subject } = renderEmail(report, reportPayload(undefined));
+    expect(subject).toBe("Your Innergy Individual AI Readiness Report — Partially Ready");
+  });
+
+  it("says Assessment, not Diagnostic", () => {
+    const { html } = renderEmail(report, reportPayload("team"));
+    expect(html).toContain("Leadership Assessment");
+    expect(html).not.toContain("Leadership Diagnostic");
+    expect(html).not.toContain("Leadership diagnostic");
+  });
+});

@@ -61,6 +61,16 @@ export async function finaliseResults(
   const rel = forTag("relational");
   const inner = forTag("inner");
 
+  const balanceAnalysis = await renderBalanceAnalysis(prisma, {
+    tenantId: tenant.id,
+    variant: copy.variant,
+    dimensions: score.dimensions,
+    nameById: new Map(
+      interpretation.perDimension.map((d) => [d.dimensionId, d.dimensionName]),
+    ),
+    lowestDimensionId: score.lowestDimensionId,
+  });
+
   const result = await prisma.result.create({
     data: {
       sessionId: session.id,
@@ -86,6 +96,9 @@ export async function finaliseResults(
         lowestDimensionId: interpretation.lowestDimensionId,
         lowestDimensionName: interpretation.lowestDimensionName,
         fellBack: interpretation.fellBack,
+        // Stored so a resumed session re-renders the same sentence rather
+        // than recomputing (or silently dropping) it.
+        balanceAnalysis,
       },
     },
   });
@@ -145,6 +158,7 @@ export async function finaliseResults(
     coach_name: coachJoin?.coach.name ?? "",
     coach_booking_url: coachJoin?.coach.bookingUrl ?? "",
     lowest_dimension_name: interpretation.lowestDimensionName,
+    balance_analysis: balanceAnalysis,
   };
   const cta1 = await resolveVariantTemplate(prisma, { key: "debrief_cta_1", tenantId: tenant.id, variant: copy.variant });
   const cta2 = await resolveVariantTemplate(prisma, { key: "debrief_cta_2", tenantId: tenant.id, variant: copy.variant });
@@ -294,6 +308,78 @@ export async function resendLatestResults(
 
   actions.push({ kind: "image_results_circle", resultId: result.id });
   return { actions };
+}
+
+/**
+ * Builds the debrief CTA's second paragraph from the reader's actual scores.
+ *
+ * This used to be a fixed illustration ("a team that scores 23 on Cognitive,
+ * 21 on Relational and 9 on Inner Mastery…") lifted from the source document.
+ * Printed directly beneath the reader's own totals it read as a description of
+ * their team, with numbers that contradicted the ones above it.
+ *
+ * Dimensions are ranked by percentage of their own maximum, never by raw
+ * score — the team sections run to 25 / 30 / 20, so Inner Mastery would
+ * otherwise look weakest for almost everyone. The copy then branches on
+ * whether one dimension genuinely trails the others, because the "strong in
+ * two, weak in the third" warning is simply untrue of an even profile.
+ *
+ * TODO(§12): BALANCE_GAP_THRESHOLD_PCT is a judgement call, not something the
+ * source document specifies. Get Rashmi's sign-off before production.
+ */
+const BALANCE_GAP_THRESHOLD_PCT = 15;
+
+async function renderBalanceAnalysis(
+  prisma: PrismaClient,
+  args: {
+    tenantId: string;
+    variant: string;
+    dimensions: ReadonlyArray<{ dimensionId: string; score: number; maxScore: number }>;
+    nameById: Map<string, string>;
+    /** The engine's own pick — see the note below on ties. */
+    lowestDimensionId: string;
+  },
+): Promise<string> {
+  const ranked = args.dimensions
+    .map((d) => ({ ...d, pct: d.maxScore > 0 ? (d.score / d.maxScore) * 100 : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+  const highest = ranked[0];
+  // Deliberately the scoring engine's lowestDimensionId rather than the last
+  // entry of this ranking. On an exact tie the two disagree — the engine sorts
+  // ascending and keeps the first dimension in display order, this sorts
+  // descending and would keep the last — and the CTA names the engine's pick
+  // one line above. Recomputing it here would contradict that sentence.
+  const lowest = ranked.find((d) => d.dimensionId === args.lowestDimensionId);
+  if (!highest || !lowest) return "";
+
+  const gapPoints = Math.round(highest.pct - lowest.pct);
+  const key =
+    gapPoints >= BALANCE_GAP_THRESHOLD_PCT
+      ? "debrief_balance_uneven"
+      : "debrief_balance_even";
+
+  const tpl = await resolveVariantTemplate(prisma, {
+    key,
+    tenantId: args.tenantId,
+    variant: args.variant,
+  });
+  // Instruments whose copy defines no analysis paragraph (the individual
+  // diagnostic) simply render the CTA without one.
+  if (!tpl) return "";
+
+  return renderTemplate(
+    tpl.body,
+    {
+      highest_dimension_name: args.nameById.get(highest.dimensionId) ?? "",
+      highest_score: highest.score,
+      highest_max: highest.maxScore,
+      lowest_dimension_name: args.nameById.get(lowest.dimensionId) ?? "",
+      lowest_score: lowest.score,
+      lowest_max: lowest.maxScore,
+      gap_points: gapPoints,
+    },
+    { templateKey: key },
+  );
 }
 
 async function maxForDimension(
