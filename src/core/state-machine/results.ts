@@ -16,6 +16,7 @@ import type { LLMProvider } from "../../providers/llm/types";
 import type { OutboundAction } from "./engine";
 import { getContactPosition } from "./engine";
 import { enqueueUserReportNotification } from "../notifications/create";
+import { BAND_CUTOFFS } from "../../db/seed/fixtures/section-bands";
 import { log } from "../logger";
 import {
   DIMENSION_TAGS,
@@ -320,14 +321,18 @@ export async function resendLatestResults(
  *
  * Dimensions are ranked by percentage of their own maximum, never by raw
  * score — the team sections run to 25 / 30 / 20, so Inner Mastery would
- * otherwise look weakest for almost everyone. The copy then branches on
- * whether one dimension genuinely trails the others, because the "strong in
- * two, weak in the third" warning is simply untrue of an even profile.
+ * otherwise look weakest for almost everyone.
  *
- * TODO(§12): BALANCE_GAP_THRESHOLD_PCT is a judgement call, not something the
- * source document specifies. Get Rashmi's sign-off before production.
+ * The branch is on whether the weakest dimension is genuinely WEAK, not on how
+ * far apart the three are. Branching on the spread alone claimed a team
+ * scoring 88% / 80% / 73% was "waiting to break under pressure" purely because
+ * the ends were 15 points apart — while the overall verdict on the same screen
+ * read "AI-Ready … the foundation to thrive". Nothing there is a weak point;
+ * the sentence was false.
+ *
+ * "Weak" means below the Developing floor, read from the same cutoffs that
+ * draw the bands, so the copy and the band labels can never disagree.
  */
-const BALANCE_GAP_THRESHOLD_PCT = 15;
 
 async function renderBalanceAnalysis(
   prisma: PrismaClient,
@@ -353,10 +358,18 @@ async function renderBalanceAnalysis(
   if (!highest || !lowest) return "";
 
   const gapPoints = Math.round(highest.pct - lowest.pct);
+  const weakFloor = BAND_CUTOFFS.developing * 100;
   const key =
-    gapPoints >= BALANCE_GAP_THRESHOLD_PCT
-      ? "debrief_balance_uneven"
-      : "debrief_balance_even";
+    lowest.pct >= weakFloor
+      // Nothing is a weak point, however far apart the three sit.
+      ? "debrief_balance_solid"
+      : highest.pct >= weakFloor
+        // One dimension trails while the others hold — the source document's
+        // "strong in two, weak in the third" case.
+        ? "debrief_balance_gap"
+        // Every dimension is below the floor; there is no strong pair to
+        // contrast the weak one against.
+        : "debrief_balance_broad";
 
   const tpl = await resolveVariantTemplate(prisma, {
     key,

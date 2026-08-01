@@ -104,25 +104,31 @@ export const TEAM_MESSAGE_TEMPLATES: TemplateSeed[] = [
       "{{balance_analysis}}",
   },
 
-  // The two shapes {{balance_analysis}} can take. Which one renders is decided
-  // in results.ts from the real spread between the strongest and weakest
-  // dimension — see renderBalanceAnalysis. Dimension names arrive as variables
-  // because they are editable content, so neither body may name one directly.
+  // The three shapes {{balance_analysis}} can take. Which one renders is
+  // decided in results.ts by whether the weakest dimension is actually weak —
+  // see renderBalanceAnalysis. Dimension names arrive as variables because
+  // they are editable content, so no body may name one directly.
+  //
+  // Only the _gap variant may name a "strongest": in the other two the
+  // strongest and weakest can be the same dimension, and naming it would
+  // contradict the line above.
   {
-    key: "team_debrief_balance_uneven",
+    key: "team_debrief_balance_gap",
     body:
       "Full Spectrum Leadership only works when all three dimensions are present. Your leaders are strongest on {{highest_dimension_name}} ({{highest_score}} / {{highest_max}}) and weakest on {{lowest_dimension_name}} ({{lowest_score}} / {{lowest_max}}) — a gap of {{gap_points}} points once each section is read against its own scale.\n\n" +
       "That gap is the risk. A team strong in two dimensions and weak in the third is not a high-performing team — it is a high-performing team waiting to break under pressure.",
   },
-  // Names no "highest": when all three sections tie, the strongest dimension
-  // and the weakest are the same one, and naming it would contradict the line
-  // above. The uneven variant is safe to name both — a gap that wide cannot
-  // put the same dimension at either end.
   {
-    key: "team_debrief_balance_even",
+    key: "team_debrief_balance_solid",
     body:
-      "Full Spectrum Leadership only works when all three dimensions are present. Your leaders read evenly across the three — only {{gap_points}} points separate the strongest section from the weakest once each is read against its own scale.\n\n" +
-      "No single dimension is dragging the others down, which is worth having. What sets the ceiling is the level itself — and {{lowest_dimension_name}} is where the next gain comes cheapest, at {{lowest_score}} / {{lowest_max}}.",
+      "Full Spectrum Leadership only works when all three dimensions are present. Yours all are — the lowest, {{lowest_dimension_name}} at {{lowest_score}} / {{lowest_max}}, is holding rather than dragging.\n\n" +
+      "That is a strong position. The work now is extending it and protecting it under pressure, and {{lowest_dimension_name}} is simply where the next gain comes cheapest.",
+  },
+  {
+    key: "team_debrief_balance_broad",
+    body:
+      "Full Spectrum Leadership only works when all three dimensions are present. Right now none of the three is carrying the others — {{lowest_dimension_name}} is lowest at {{lowest_score}} / {{lowest_max}}, but the shortfall runs across the whole spectrum.\n\n" +
+      "That is not a single gap to close, it is a foundation to build. {{lowest_dimension_name}} is where to start, because it is the constraint the other two are working around.",
   },
   {
     key: "team_debrief_cta_2",

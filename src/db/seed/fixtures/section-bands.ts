@@ -16,6 +16,14 @@
 // Ranges are contiguous by construction: each band's ceiling is the next
 // band's floor minus one, so no score can fall between two bands.
 
+/**
+ * The tier boundaries, as a share of a section's own maximum. Exported so the
+ * debrief copy decides "is this dimension actually weak?" against the same
+ * rule that draws the bands, instead of a separate threshold that could drift
+ * away from them.
+ */
+export const BAND_CUTOFFS = { atRisk: 0.25, developing: 0.5, strong: 0.75 } as const;
+
 export interface SectionBandCopy {
   strong: string;
   developing: string;
