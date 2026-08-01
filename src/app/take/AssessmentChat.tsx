@@ -250,7 +250,9 @@ export function AssessmentChat({
       )}
 
       <div className="flex flex-col overflow-hidden rounded-3xl border border-[var(--container-light)] bg-[var(--background)] shadow-sm">
-        <div className="flex items-center justify-between border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-2.5">
+        {/* Tighter vertical padding on phones, where the 44px "Start over"
+            target already gives the bar its height. */}
+        <div className="flex items-center justify-between border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-1 sm:py-2.5">
           <div className="flex items-center gap-2 text-xs font-medium text-[var(--foreground)]">
             <span className="inline-flex h-2 w-2 rounded-full bg-[var(--accent-pink)]" />
             {state === "loading" ? "Connecting…" : stateLabel(state)}
@@ -258,7 +260,7 @@ export function AssessmentChat({
           <button
             onClick={handleRestart}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#8A7868] transition hover:bg-white/60 hover:text-[var(--foreground)] disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-3 py-1 text-xs font-medium text-[#8A7868] transition hover:bg-white/60 hover:text-[var(--foreground)] disabled:opacity-50 sm:min-h-0 sm:px-2"
             title="Abandon the current session and begin a new assessment"
           >
             <svg

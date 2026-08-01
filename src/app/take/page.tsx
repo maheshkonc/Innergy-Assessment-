@@ -137,7 +137,9 @@ export default async function TakePage({
             </p>
             <a
               href="/take"
-              className="mt-4 inline-block text-xs font-medium text-[var(--foreground)] underline underline-offset-4 opacity-60 transition hover:opacity-100"
+              /* min-h only on touch widths: the label is 16px tall, well under
+                 the ~44px a finger needs. Desktop keeps the compact link. */
+              className="mt-1 inline-flex min-h-[44px] items-center text-xs font-medium text-[var(--foreground)] underline underline-offset-4 opacity-60 transition hover:opacity-100 sm:mt-4 sm:min-h-0"
             >
               ← Choose a different assessment
             </a>
