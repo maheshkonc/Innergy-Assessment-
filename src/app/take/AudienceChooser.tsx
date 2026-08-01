@@ -28,7 +28,11 @@ export function AudienceChooser({ cards }: { cards: AudienceCard[] }) {
           Full Spectrum Leadership
         </span>
 
-        <h1 className="mt-8 font-serif-heading text-5xl leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-6xl">
+        {/* Fluid rather than a fixed 48px: "Assess yourself," is one
+            unbreakable line, and at 48px it is wider than a 320px phone's
+            content column — which stretched the whole grid and scrolled the
+            page sideways. Floors at 40px, caps at the original 48px. */}
+        <h1 className="mt-8 font-serif-heading text-[clamp(2.5rem,11vw,3rem)] leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-6xl">
           Assess <em className="italic text-[var(--accent-pink)]">yourself</em>,
           <br />
           or your team.
@@ -48,7 +52,10 @@ export function AudienceChooser({ cards }: { cards: AudienceCard[] }) {
             aria-label={`Start the ${card.title} assessment — ${card.meta}`}
             className="group rounded-[28px] bg-white p-8 shadow-[0_1px_2px_rgba(54,33,27,0.04)] outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(54,33,27,0.10)] focus-visible:ring-2 focus-visible:ring-[var(--accent-pink)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] sm:p-10"
           >
-            <div className="flex items-start justify-between gap-4">
+            {/* Wraps only when it has to. The pill and the nowrap meta sit
+                side by side at 220px, which with the card's padding exceeds a
+                320px phone's content column and stretched the whole grid. */}
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
               <span className="inline-flex items-center rounded-full bg-[var(--accent-yellow)] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--foreground)]">
                 {card.eyebrow}
               </span>

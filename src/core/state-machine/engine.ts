@@ -211,10 +211,17 @@ async function handleAskEmail(
 ): Promise<HandleInboundResult> {
   const email = sanitiseFreeText(input.text);
   if (!email || !isEmailAddress(email)) {
-    // Deliberately NOT invalid_answer: that key is the answer-a-question
-    // message, which on the team variant reads "reply with a number from 1
-    // to 5" — nonsense at a free-text step.
-    const body = await render(prisma, "invalid_email", input, {});
+    // invalid_email in preference to invalid_answer: the latter is the
+    // answer-a-question message, which on the team variant reads "reply with
+    // a number from 1 to 5" — nonsense at a free-text step. It stays as the
+    // fallback so an environment that has not been re-seeded still gets a
+    // usable reply instead of a 500.
+    const body = await renderFirstAvailable(
+      prisma,
+      ["invalid_email", "invalid_answer"],
+      input,
+      {},
+    );
     actions.push({ kind: "text", body });
     return { actions, newContext: { state: "ask_email" } };
   }
@@ -483,6 +490,44 @@ async function render(
   if (!tpl) throw new TemplateError(`no template for key=${key}`, { templateKey: key });
   const base = await buildBaseVars(prisma, input.tenant, input.copy);
   return renderTemplate(tpl.body, { ...base, ...extraVars }, { templateKey: key, allowMissing: opts.allowMissing });
+}
+
+/**
+ * Renders the first key that resolves, falling back down the list.
+ *
+ * Introducing a new template key makes it a hard dependency the moment the
+ * code ships: a database seeded before that key existed resolves nothing,
+ * render() throws, and the request 500s. On a validation path that dead-ends
+ * the session outright — every retry takes the same branch, so the user cannot
+ * get past the step no matter what they type.
+ *
+ * The fallback keeps them moving on older copy. It is logged at error level
+ * rather than swallowed, because the real fix is always to seed the missing
+ * row — this only stops a config gap from becoming a stuck session.
+ */
+async function renderFirstAvailable(
+  prisma: PrismaClient,
+  keys: string[],
+  input: FlowInput,
+  extraVars: Record<string, string | number>,
+): Promise<string> {
+  for (const key of keys) {
+    const tpl = await resolveVariantTemplate(prisma, {
+      key,
+      tenantId: input.tenant.id,
+      variant: input.copy.variant,
+    });
+    if (!tpl) {
+      log.error(
+        { key, tenantId: input.tenant.id, fallbacks: keys.slice(keys.indexOf(key) + 1) },
+        "message template missing — run db:seed for this environment",
+      );
+      continue;
+    }
+    const base = await buildBaseVars(prisma, input.tenant, input.copy);
+    return renderTemplate(tpl.body, { ...base, ...extraVars }, { templateKey: key });
+  }
+  throw new TemplateError(`no template for keys=${keys.join(", ")}`, { templateKey: keys[0] });
 }
 
 async function buildBaseVars(prisma: PrismaClient, tenant: Tenant, copy: InstrumentCopy) {

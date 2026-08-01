@@ -50,7 +50,6 @@ type Bubble =
   | (BubbleBase & {
     author: "user";
     kind: "answered_question";
-    sectionName: string;
     questionNumber: number;
     total: number;
     stem: string;
@@ -439,7 +438,7 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
             <div className="w-full overflow-hidden rounded-2xl rounded-br-sm border border-[var(--foreground)]/20 bg-white shadow-sm ring-1 ring-[var(--container-light)]">
               <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-2">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground)]">
-                  Q{bubble.questionNumber} of {bubble.total} · {bubble.sectionName}
+                  Q{bubble.questionNumber} of {bubble.total}
                 </div>
                 <div className="mt-1 text-sm leading-relaxed text-[var(--foreground)]">
                   {bubble.stem}
@@ -460,8 +459,8 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
     }
     return (
       <div className="flex items-end justify-end gap-2">
-        <div className="flex max-w-[80%] flex-col items-end gap-1">
-          <div className="rounded-2xl rounded-br-sm bg-[var(--container-dark)] px-4 py-2 text-sm text-white shadow-sm">
+        <div className="flex min-w-0 max-w-[80%] flex-col items-end gap-1">
+          <div className="max-w-full break-words rounded-2xl rounded-br-sm bg-[var(--container-dark)] px-4 py-2 text-sm text-white shadow-sm">
             {bubble.body}
           </div>
           <span className="text-[10px] text-[var(--foreground)] opacity-60">{time}</span>
@@ -494,15 +493,20 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
   const dim = parseDimensionResult(bubble.body);
   const overall = dim ? null : parseOverallResult(bubble.body);
   return (
+    // min-w-0 lets this column shrink below its content's intrinsic width.
+    // Without it a bubble sizes to whatever its widest indivisible content is
+    // — a chart ApexCharts pinned to 300px, or an unbreakable URL — and the
+    // card ends up wider than the column, scrolling the whole panel sideways
+    // on a phone.
     <div className="flex items-end gap-2">
       <Avatar who="bot" />
-      <div className="flex max-w-[85%] flex-col items-start gap-1">
+      <div className="flex min-w-0 max-w-[92%] flex-col items-start gap-1 sm:max-w-[85%]">
         {dim ? (
           <DimensionResultCard {...dim} />
         ) : overall ? (
           <OverallResultCard {...overall} />
         ) : (
-          <div className="whitespace-pre-wrap rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white px-4 py-2.5 text-sm leading-relaxed text-[var(--foreground)] shadow-sm ring-1 ring-[var(--container-light)]">
+          <div className="max-w-full whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white px-4 py-2.5 text-sm leading-relaxed text-[var(--foreground)] shadow-sm ring-1 ring-[var(--container-light)]">
             <LinkifiedText text={bubble.body} />
           </div>
         )}
@@ -514,7 +518,7 @@ function BubbleView({ bubble }: { bubble: Bubble }) {
 
 function DimensionResultCard({ title, score, max, band, body }: DimensionResult) {
   return (
-    <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
+    <div className="w-full overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
       <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-2.5">
         <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--accent-pink)] opacity-80">
           Result
@@ -549,7 +553,7 @@ function OverallResultCard({
   dimensions,
 }: OverallResult) {
   return (
-    <div className="overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
+    <div className="w-full overflow-hidden rounded-2xl rounded-bl-sm border-l-[3px] border-[var(--accent-yellow)] bg-white shadow-sm ring-1 ring-[var(--container-light)]">
       <div className="border-b border-[var(--container-light)] bg-[var(--background)] px-4 py-3">
         <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--accent-pink)] opacity-80">
           Overall
@@ -866,7 +870,6 @@ function QuestionWidget({
           onSubmit(selected, {
             author: "user",
             kind: "answered_question",
-            sectionName: widget.sectionName,
             questionNumber: widget.questionNumber,
             total: widget.total,
             stem: widget.stem,
@@ -1002,13 +1005,30 @@ function AssessmentSpiderChart({
     legend: { show: false },
     responsive: [
       {
+        // Phones. The polygon is pulled well in from the container edge
+        // because the vertex labels sit OUTSIDE it — "Relational Influence"
+        // needs roughly 45px to its right, and at a larger radius it was
+        // being clipped by the chart's own viewBox.
         breakpoint: 480,
         options: {
-          chart: { height: 260 },
-          plotOptions: { radar: { size: 74 } },
-          grid: { padding: { left: 18, right: 18, top: 0, bottom: 8 } },
+          chart: { height: 250 },
+          plotOptions: { radar: { size: 56 } },
+          grid: { padding: { left: 6, right: 6, top: 0, bottom: 6 } },
           xaxis: { labels: { style: { fontSize: "9px" } } },
           dataLabels: { style: { fontSize: "9px" } },
+        },
+      },
+      {
+        // 320px phones. The bubble leaves the chart only ~170px, and a vertex
+        // label needs ~40px of it on each side, so the polygon has to be
+        // smaller again to stay inside the container.
+        breakpoint: 350,
+        options: {
+          chart: { height: 230 },
+          plotOptions: { radar: { size: 36 } },
+          grid: { padding: { left: 2, right: 2, top: 0, bottom: 4 } },
+          xaxis: { labels: { style: { fontSize: "8px" } } },
+          dataLabels: { style: { fontSize: "8px" } },
         },
       },
     ],
